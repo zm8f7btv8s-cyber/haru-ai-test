@@ -23,13 +23,34 @@ let body;try{body=await r.json()}catch{throw Error('서버 응답 형식을 확�
 if(!r.ok)throw Error(r.status===403?'접속 주소가 허용되지 않았어요 (403)':r.status===500?'서버 API 키 설정을 확인해 주세요 (500)':`서버 응답 오류 (${r.status}${body?.status?'/'+body.status:''})`);
 if(typeof body?.reply!=='string'||!body.reply.trim())throw Error('AI 응답이 비어 있어요');return body.reply.trim();
 }catch(e){if(e.name==='AbortError')throw Error('서버 응답이 지연돼 연결 시간이 초과됐어요');if(e instanceof TypeError)throw Error('서버 연결 실패: 네트워크 또는 CORS 설정을 확인해 주세요');throw e}finally{clearTimeout(timer)}}
+const kinds=new Set(['events','tasks','notes','works']);
+function validDate(v){if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const d=new Date(v+'T12:00:00');return !Number.isNaN(d.valueOf())&&[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')===v}
+function extractJSON(raw){let t=raw.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');try{return JSON.parse(t)}catch{const a=t.indexOf('{'),b=t.lastIndexOf('}');if(a<0||b<=a)throw Error('AI 응답에서 JSON을 찾지 못했어요');return JSON.parse(t.slice(a,b+1))}}
+async function interpretAI(text){
+ const now=new Date();const today=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
+ const prompt=`당신은 한국어 일정/할 일/메모/작업 정보 추출기입니다. 현재 한국 날짜는 ${today}이고 시간대는 Asia/Seoul입니다. 다음 사용자의 요청을 분석하여 JSON 객체 하나만 출력하세요. 마크다운, 설명, 코드펜스 금지. 스키마: {"kind":"events|tasks|notes|works","title":"간결한 한국어 제목","date":"YYYY-MM-DD 또는 빈 문자열","time":"HH:MM 또는 빈 문자열","place":"장소 또는 빈 문자열"}. 약속/예약/모임/회의/일정은 events, 할 일/준비는 tasks, 기억/메모는 notes, 작성/조사/계획은 works. 날짜가 없으면 빈 문자열, 시간이 없으면 빈 문자열. 오늘/내일/모레는 현재 날짜 기준으로 계산. 추측 금지. 제목에서 날짜, 시간, 명령어 어미를 제거하되 의미는 유지. 요청 원문: ${JSON.stringify(text)}`;
+ const raw=await requestAI(prompt);const obj=extractJSON(raw);
+ if(!obj||!kinds.has(obj.kind)||typeof obj.title!=='string'||!obj.title.trim()||obj.title.length>160)throw Error('AI가 요청 정보를 올바르게 반환하지 않았어요');
+ for(const k of ['date','time','place'])if(typeof obj[k]!=='string')throw Error('AI 응답 필드가 올바르지 않아요');
+ if(obj.date&&!validDate(obj.date))throw Error('AI 날짜가 올바르지 않아요');
+ if(obj.time&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(obj.time))throw Error('AI 시간이 올바르지 않아요');
+ if(obj.place.length>160)throw Error('AI 장소가 너무 길어요');
+ return {kind:obj.kind,title:obj.title.trim(),date:obj.date,time:obj.time,place:obj.place.trim(),original:text};
+}
 async function handle(form,original,input){if(busy)return;const text=input.value.trim();if(!text)return;
-if(actionable.test(text)){original.call(form,{preventDefault(){},currentTarget:form,target:form});return}
-if(text.length>2000){alert('AI 질문은 2,000자 이내로 입력해 줘.');return}
-busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button');send.disabled=true;chatButton.disabled=true;
-try{append('user',text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();showChat();const pending=document.createElement('div');pending.className='bubble ai-pending';pending.textContent='하루가 답변을 준비하고 있어요…';$('messages').append(pending);
-try{const reply=await requestAI(text);append('assistant',reply)}catch(err){append('assistant','AI 서버 연결에 실패했어요. '+err.message+' 다시 시도해 주세요.')}render();
-}catch(err){alert('대화 저장 오류: '+err.message)}finally{busy=false;send.disabled=false;chatButton.disabled=false}}
+ if(text.length>2000){alert('요청은 2,000자 이내로 입력해 줘.');return}
+ busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button');send.disabled=true;chatButton.disabled=true;
+ try{
+  if(actionable.test(text)){
+   const indicator=$('speechStatus');indicator.textContent='AI가 요청을 분석하는 중…';
+   try{const item=await interpretAI(text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();append('user',text);window.HaruShowAIProposal(item);indicator.textContent='AI 분석 완료 · 확인창에서 저장 여부를 결정해 줘.'}
+   catch(err){indicator.textContent='AI 분석 실패 · 기존 방식으로 전환했어 ('+err.message+')';original.call(form,{preventDefault(){},currentTarget:form,target:form});}
+   return;
+  }
+  append('user',text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();showChat();const pending=document.createElement('div');pending.className='bubble ai-pending';pending.textContent='하루가 답변을 준비하고 있어요…';$('messages').append(pending);
+  try{const reply=await requestAI(text);append('assistant',reply)}catch(err){append('assistant','AI 서버 연결에 실패했어요. '+err.message+' 다시 시도해 주세요.')}render();
+ }catch(err){alert('요청 처리 오류: '+err.message)}finally{busy=false;send.disabled=false;chatButton.disabled=false}
+}
 $('ask').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('ask'),originalHome,$('askText'))};
 $('chatForm').onsubmit=e=>{e.preventDefault();void handle($('chatForm'),originalChat,$('chatText'))};
 $('aiTest').onclick=async()=>{const b=$('aiTest'),s=$('aiTestStatus');b.disabled=true;s.textContent='서버 응답 확인 중…';try{const r=await requestAI('연결 테스트입니다. 한국어로 짧게 인사해 주세요.');s.textContent='연결 성공 · '+r.slice(0,160)}catch(e){s.textContent='연결 실패 · '+e.message}finally{b.disabled=false}};

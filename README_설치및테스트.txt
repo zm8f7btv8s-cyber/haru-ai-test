@@ -1,18 +1,14 @@
-하루 2.1 AI 통합 테스트판 (2026-11-16)
+하루 2.2 AI 일정 분석 테스트판 (2026-11-16)
 
-1. 이 ZIP을 풀면 index.html, app.js, style.css, voice-legacy.js, manifest.webmanifest, ai-bridge.js가 있습니다.
-2. GitHub Pages 테스트 저장소 루트에 위 6개 파일을 함께 올리세요. 기존 데이터 백업(JSON)을 먼저 다운로드하세요.
-3. Safari에서 테스트 사이트를 열고 설정(☰) → AI 서버 연결 테스트를 누르세요.
-4. 성공하면 홈에서 “안녕, 오늘 기분이 어때?”처럼 일반 질문을 전송하세요.
-5. “내일 오후 3시에 내과 예약해 줘”는 기존 규칙 기반 확인창으로 이동하고, 사용자가 확인해야 저장됩니다.
-6. 일정 등록·수정·삭제, 음성 입력, 메모, 데이터 내보내기를 점검하세요.
+1. 기존 하루 앱 > 하루의 기록 > 데이터 내보내기로 JSON 백업.
+2. 이 폴더의 웹 파일 6개(index.html, app.js, ai-bridge.js, style.css, voice-legacy.js, manifest.webmanifest)를 기존 haru-ai-test 저장소의 루트에 업로드하고 커밋. README는 선택사항.
+3. GitHub Pages 반영에 수 분이 걸릴 수 있음. Safari 새로고침.
+4. 설정 > AI 서버 연결 테스트. 성공 확인.
+5. 홈에서 '내일 오후 3시에 치과 예약해 줘' 입력 > 전송. AI 분석 확인창의 제목/날짜/시간을 검토 > 확인하고 저장.
+6. 나의 일정에서 등록 확인, 수정/삭제 확인. '오늘 날씨가 어때?' 같은 일반 질문으로 AI 대화 테스트.
+7. 설정 > API 크레딧 잔액·결제 관리 / API 사용량 확인 링크 테스트.
+8. AI 분석이 실패하면 기존 규칙 기반 확인창으로 전환.
 
-중요:
-- Worker는 https://haru-ai.nsunrang.workers.dev/chat 를 사용합니다.
-- Worker는 Origin을 https://zm8f7btv8s-cyber.github.io 로 엄격히 검사합니다. 다른 도메인이나 file://로 열면 403 또는 CORS 오류가 납니다.
-- API 키는 ZIP에 없고 Cloudflare Worker의 OPENAI_API_KEY secret에만 있어야 합니다.
-- AI 일반 대화는 서버 연결, 일정·할 일·메모·작업 요청은 기존 로컬 규칙을 사용합니다. AI 기반 일정 추출은 아직 구현하지 않았습니다.
-- 기존 저장소 키 haru.assistant.v2.foundation, haru.fresh.test.v1는 변경하지 않았습니다.
-- 앱을 동일한 GitHub Pages 주소에서 실행할 때만 같은 브라우저의 localStorage를 공유합니다.
-- 현재 Worker의 API 호출 성공은 아직 실제 검증하지 않았습니다.
-- AI 질문은 서버로 전송되므로 비밀번호, 주민등록번호 등 민감한 정보는 입력하지 마세요.
+주의: AI는 날짜/시간을 틀릴 수 있으므로 저장 전에 반드시 확인. 일정은 기기 localStorage에 저장되며 서버에 자동 저장되지 않음. 기존 localStorage 키(haru.assistant.v2.foundation 및 haru.fresh.test.v1)는 변경하지 않음. API 키는 앱에 포함되지 않음. 서버는 기존 POST /chat만 사용.
+
+실제 아이폰 및 AI 응답 테스트는 사용자가 배포 후 확인해야 함.

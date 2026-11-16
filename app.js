@@ -32,6 +32,18 @@ function conciseTitle(text,kind){
  return t||text.trim();
 }
 function interpret(text){const t=text.trim(),isEvent=/예약|약속|회의|모임|일정|방문|진료|수업|골프/.test(t),isTask=/할\s*일|해야\s*할|잊지\s*말|챙겨|준비해/.test(t),isMemo=/기억해|메모|적어\s*둬|기록해/.test(t),isWork=/작성해|정리해|조사해|비교해|계획\s*세워/.test(t);let kind=isMemo?'notes':isWork?'works':isTask?'tasks':isEvent?'events':null;if(!kind)return null;const dateValue=localDate(t),time=localTime(t);let title=conciseTitle(t,kind);return {kind,title,date:dateValue,time,place:'',original:t}}
+window.HaruShowAIProposal=function(item){
+ if(!item||!['events','tasks','notes','works'].includes(item.kind))throw Error('지원하지 않는 요청 종류');
+ pending={...item,original:item.original||''};
+ const names={events:'일정',tasks:'할 일',notes:'메모',works:'작업'};
+ $('proposalHeading').textContent='AI '+names[item.kind]+' 등록 확인';
+ $('proposalInfo').textContent='AI가 분석한 내용이야. 날짜·시간·제목을 확인하고 수정한 뒤 저장해 줘. 확인 전에는 저장되지 않아.';
+ const f=$('proposalForm');f.elements.title.value=item.title||'';
+ f.elements.date.value=item.date||'';f.elements.time.value=item.time||'';f.elements.place.value=item.place||'';
+ const dated=item.kind==='events'||item.kind==='tasks';
+ $('proposalDateRow').hidden=!dated;$('proposalTimeRow').hidden=item.kind!=='events';$('proposalPlaceRow').hidden=item.kind!=='events';
+ show('chat');$('proposal').showModal();$('proposalHeading').focus({preventScroll:true});
+};
 function ask(text){state.messages.push({who:'user',text});save();const item=interpret(text);if(!item){state.messages.push({who:'assistant',text:'아직 AI 서버가 연결되지 않았어. 지금은 일정·할 일·메모·작업 요청의 일부 표현만 인식할 수 있어. 다른 질문에 답하거나 웹 검색을 실행하지는 못해.'});save();show('chat');return}pending=item;const names={events:'일정',tasks:'할 일',notes:'메모',works:'작업'};$('proposalHeading').textContent=names[item.kind]+' 등록 확인';$('proposalInfo').textContent='간단한 규칙으로 추출한 내용이야. 정확하지 않을 수 있으니 확인하고 수정해 줘. AI 분석은 아직 연결되지 않았어.';const f=$('proposalForm');f.elements.title.value=item.title;f.elements.date.value=item.date;f.elements.time.value=item.time;f.elements.place.value=item.place;const dated=item.kind==='events'||item.kind==='tasks';$('proposalDateRow').hidden=!dated;$('proposalTimeRow').hidden=item.kind!=='events';$('proposalPlaceRow').hidden=item.kind!=='events';show('chat');$('proposal').showModal();$('proposalHeading').focus({preventScroll:true})}
 $('proposalCancel').onclick=()=>{pending=null;$('proposal').close()};$('proposalForm').onsubmit=e=>{e.preventDefault();if(!pending)return;const f=e.currentTarget,title=f.elements.namedItem('title').value.trim();if(!title){alert('제목을 입력해 줘.');return}const kind=pending.kind;const item={id:uid(),title};if(kind==='events'||kind==='tasks'){item.date=f.elements.namedItem('date').value||date();if(kind==='events'){item.time=f.elements.namedItem('time').value;item.place=f.elements.namedItem('place').value.trim()}else item.done=false}else if(kind==='works')item.done=false;else{item.text=title;item.created=date();delete item.title}
 // Commit the record and confirmation together; do not report success until persistence is verified.
