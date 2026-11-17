@@ -25,3 +25,13 @@
 
 /* Haru 2.2: official external billing links */
 .billing-link{display:block;margin-top:12px;padding:12px 14px;border-radius:12px;background:#536b84;color:white;text-decoration:none;font-weight:650;text-align:center}.billing-link.secondary{background:#edf1f5;color:#425a72}#aiTest{min-height:46px}#speechStatus{overflow-wrap:anywhere}
+
+/* 2.2.1 compact confirmation: keep fields editable without extra mandatory steps */
+#proposalHeading:focus{outline:none!important}
+#proposal .proposal-summary{background:#f0f4f8;border:1px solid #dbe5ed;border-radius:14px;padding:16px;display:grid;gap:9px}
+#proposal .proposal-summary strong{font-size:19px;color:#293b4b}
+#proposal .proposal-summary div{font-size:14px;color:#566d82}
+#proposal .proposal-edit{background:transparent!important;color:#476884!important;border:0!important;padding:5px!important;text-align:left;font-weight:650}
+#proposalFields[hidden]{display:none!important}
+#proposal .duplicate-warning{color:#9b5a19;font-size:13px}
+#proposal menu button[type=submit]{flex:1;font-weight:700;min-height:48px}

@@ -4,6 +4,7 @@ const KEY='haru.assistant.v2.foundation';
 const $=id=>document.getElementById(id);
 const originalHome=$('ask').onsubmit;
 const originalChat=$('chatForm').onsubmit;
+let lastRequest='';
 let busy=false;
 // Existing schedule, task, memo and work commands always use the original
 // local confirmation workflow. No AI output is ever automatically saved as an item.
@@ -42,6 +43,7 @@ async function handle(form,original,input){if(busy)return;const text=input.value
  busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button');send.disabled=true;chatButton.disabled=true;
  try{
   if(actionable.test(text)){
+   lastRequest=text;
    const indicator=$('speechStatus');indicator.textContent='AI가 요청을 분석하는 중…';
    try{const item=await interpretAI(text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();append('user',text);window.HaruShowAIProposal(item);indicator.textContent='AI 분석 완료 · 확인창에서 저장 여부를 결정해 줘.'}
    catch(err){indicator.textContent='AI 분석 실패 · 기존 방식으로 전환했어 ('+err.message+')';original.call(form,{preventDefault(){},currentTarget:form,target:form});}
@@ -54,4 +56,19 @@ async function handle(form,original,input){if(busy)return;const text=input.value
 $('ask').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('ask'),originalHome,$('askText'))};
 $('chatForm').onsubmit=e=>{e.preventDefault();void handle($('chatForm'),originalChat,$('chatText'))};
 $('aiTest').onclick=async()=>{const b=$('aiTest'),s=$('aiTestStatus');b.disabled=true;s.textContent='서버 응답 확인 중…';try{const r=await requestAI('연결 테스트입니다. 한국어로 짧게 인사해 주세요.');s.textContent='연결 성공 · '+r.slice(0,160)}catch(e){s.textContent='연결 실패 · '+e.message}finally{b.disabled=false}};
+})();
+
+// Compact one-confirmation schedule card, with optional editing and a browser-safe external link flow.
+(()=>{
+ const $=id=>document.getElementById(id);
+ const f=$('proposalForm'),fields=$('proposalFields'),summary=$('proposalSummary'),edit=$('proposalEdit');
+ const refresh=()=>{const t=f.elements.title.value,d=f.elements.date.value,h=f.elements.time.value,p=f.elements.place.value;
+ summary.replaceChildren();
+ const title=document.createElement('strong');title.textContent=t||'제목 확인 필요';summary.append(title);
+ const detail=document.createElement('div');detail.textContent=[d,h,p].filter(Boolean).join(' · ')||'날짜·시간 미지정';summary.append(detail);
+ };
+ window.HaruProposalCompact=()=>{fields.hidden=true;edit.textContent='✎ 내용 수정';refresh();};
+ edit.addEventListener('click',()=>{fields.hidden=!fields.hidden;edit.textContent=fields.hidden?'✎ 내용 수정':'수정 접기';if(!fields.hidden)f.elements.title.focus()});
+ for(const name of ['title','date','time','place'])f.elements[name].addEventListener('input',refresh);
+ document.querySelectorAll('a[href^="https://platform.openai.com/"]').forEach(a=>{a.target='_blank';a.rel='noopener noreferrer';a.title='외부 사이트 새 창 열기';});
 })();
