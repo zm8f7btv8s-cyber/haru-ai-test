@@ -9,6 +9,9 @@ let busy=false;
 // Existing schedule, task, memo and work commands always use the original
 // local confirmation workflow. No AI output is ever automatically saved as an item.
 const actionable=/예약|약속|회의|모임|일정|방문|진료|수업|골프|할\s*일|해야\s*할|잊지\s*말|챙겨|준비해|기억해|메모|적어\s*둬|기록해|작성해|정리해|조사해|비교해|계획\s*세워/;
+const queryOnly=/(알려|보여|브리핑|몇\s*개|뭐\s*있|있어\?|있나요|어때|언제|무엇|뭐야|설명|추천)/;
+const creation=/(등록|추가|저장|예약해|잡아\s*줘|넣어\s*줘|기록해|적어\s*둬|기억해|만들어|해\s*줘|있어|있다|있음|예정|갈\s*거|가야)/;
+function isAction(text){if(queryOnly.test(text)&&!/(등록|추가|저장|예약해|잡아\s*줘)/.test(text))return false;return actionable.test(text)&&creation.test(text)}
 function read(){try{const s=JSON.parse(localStorage.getItem(KEY)||'null');return s&&typeof s==='object'&&Array.isArray(s.messages)?s:null}catch{return null}}
 function append(who,text){const s=read();if(!s)throw Error('대화 저장소를 읽을 수 없어요');s.messages.push({who,text});localStorage.setItem(KEY,JSON.stringify(s));}
 function showChat(){document.querySelector('[data-go="chat"]')?.click(); // fallback: the chat section has no dedicated nav button
@@ -42,7 +45,7 @@ async function handle(form,original,input){if(busy)return;const text=input.value
  if(text.length>2000){alert('요청은 2,000자 이내로 입력해 줘.');return}
  busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button');send.disabled=true;chatButton.disabled=true;
  try{
-  if(actionable.test(text)){
+  if(isAction(text)){
    lastRequest=text;
    const indicator=$('speechStatus');indicator.textContent='AI가 요청을 분석하는 중…';
    try{const item=await interpretAI(text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();append('user',text);window.HaruShowAIProposal(item);indicator.textContent='AI 분석 완료 · 확인창에서 저장 여부를 결정해 줘.'}
