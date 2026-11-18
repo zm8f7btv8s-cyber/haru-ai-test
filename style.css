@@ -159,3 +159,33 @@ nav{padding:10px 6px calc(11px + env(safe-area-inset-bottom));min-height:78px;}
 nav button{font-size:27px!important;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
 nav button span{font-size:12px!important;font-weight:650;margin-top:0!important;}
 #app{padding-bottom:125px;}
+
+
+/* Haru 2.4.4: restore compact bottom navigation; line icons only */
+nav {
+  padding: 7px 6px calc(8px + env(safe-area-inset-bottom)) !important;
+  min-height: 0 !important;
+  box-sizing: border-box;
+}
+nav button {
+  font-size: 0 !important;
+  min-height: 44px !important;
+  gap: 2px !important;
+  padding: 3px 2px !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+nav button .haru-nav-icon {
+  display: block;
+  width: 23px;
+  height: 23px;
+  flex: none;
+}
+nav button span {
+  font-size: 10px !important;
+  font-weight: 600;
+  margin-top: 2px !important;
+}
+#app {padding-bottom: 110px !important;}
