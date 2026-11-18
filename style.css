@@ -150,3 +150,12 @@ nav button{font-size:21px}nav button span{font-size:10px;margin-top:2px}
 #home .dashboard-shortcuts b{font-size:14px;margin-top:5px}
 #home .dashboard-shortcuts small{display:none}
 @media(max-height:760px){#home .season-hero{height:108px}#home .dashboard-shortcuts button{min-height:64px}#home .home-glass{margin:5px 0}}
+
+/* 하루 2.4.3: 마이크 심볼 및 하단 고정 메뉴 가독성 개선 */
+#home .ask-new .ask-actions #mic::after{content:""!important;display:inline-block;width:23px;height:23px;background-color:currentColor;vertical-align:middle;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='9' y='2' width='6' height='13' rx='3' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;}
+#home .ask-new .ask-actions #mic[aria-pressed="true"]::after{mask:none;background:transparent;content:"✕"!important;font-size:23px;line-height:23px;}
+#chatMic{display:inline-flex;align-items:center;justify-content:center;}
+nav{padding:10px 6px calc(11px + env(safe-area-inset-bottom));min-height:78px;}
+nav button{font-size:27px!important;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
+nav button span{font-size:12px!important;font-weight:650;margin-top:0!important;}
+#app{padding-bottom:125px;}
