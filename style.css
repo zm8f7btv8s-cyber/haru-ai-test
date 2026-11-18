@@ -56,3 +56,6 @@ html{overflow-x:hidden}body{overflow-x:hidden}input,textarea,select,#entryForm i
 .haru-setting-line{display:flex;align-items:center;gap:10px;margin:14px 0;font-size:14px}
 .haru-setting-line input{width:20px;height:20px}.haru-setting-line select{margin-left:auto;padding:8px}
 #chatSpeechStatus{min-height:12px}
+
+/* Haru 2.4 integrated tasks and winter palette */
+:root{--haru-blue:#667d9b;--haru-mist:#94a8c1;--haru-slate:#34465d}body{background:#f4f6fa} .haru-linked{background:#edf2f7;border-radius:10px;padding:9px 12px;margin:9px 0}.haru-linked label{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:14px}.haru-linked input{width:18px;height:18px}#parentEventRow select{display:block;width:100%;padding:12px;border-radius:10px;border:1px solid #cbd5e1;background:white;font-size:16px}
