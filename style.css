@@ -57,5 +57,19 @@ html{overflow-x:hidden}body{overflow-x:hidden}input,textarea,select,#entryForm i
 .haru-setting-line input{width:20px;height:20px}.haru-setting-line select{margin-left:auto;padding:8px}
 #chatSpeechStatus{min-height:12px}
 
-/* Haru 2.4 integrated tasks and winter palette */
-:root{--haru-blue:#667d9b;--haru-mist:#94a8c1;--haru-slate:#34465d}body{background:#f4f6fa} .haru-linked{background:#edf2f7;border-radius:10px;padding:9px 12px;margin:9px 0}.haru-linked label{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:14px}.haru-linked input{width:18px;height:18px}#parentEventRow select{display:block;width:100%;padding:12px;border-radius:10px;border:1px solid #cbd5e1;background:white;font-size:16px}
+/* 하루 2.4: 계절별 홈 대시보드 — 기존 앱 스타일을 비파괴적으로 확장 */
+:root{--season-sky:#718bad;--season-glow:#f1cfb5;--season-hill:#9bb1c6;--season-forest:#4b6787}
+body[data-season="spring"]{--season-sky:#9ab8c7;--season-glow:#f2c7cc;--season-hill:#b7cbbf;--season-forest:#7f9b8a}
+body[data-season="summer"]{--season-sky:#5e9db1;--season-glow:#e3dbab;--season-hill:#80b3a0;--season-forest:#417e70}
+body[data-season="autumn"]{--season-sky:#8a9ba9;--season-glow:#e8b28e;--season-hill:#b5a18d;--season-forest:#806b61}
+body[data-season="winter"]{--season-sky:#6885ad;--season-glow:#f1cfb5;--season-hill:#afc4d9;--season-forest:#55718f}
+#home .season-hero{position:relative;isolation:isolate;overflow:hidden;min-height:168px;padding:22px 22px;background:linear-gradient(145deg,var(--season-sky),#c4d3df);color:#fff}
+#home .season-hero small,#home .season-hero p{color:#f5f8fc}#home .season-hero h1{margin:14px 0 6px;font-size:26px}#home .hero-copy{position:relative;z-index:2;text-shadow:0 1px 8px #233b5366}
+.hero-landscape{position:absolute;inset:0;overflow:hidden;pointer-events:none}.hero-sun{position:absolute;width:90px;height:90px;border-radius:50%;background:radial-gradient(circle,var(--season-glow),transparent 70%);right:12%;top:10%}.hero-hill{position:absolute;width:110%;height:115px;left:-5%;bottom:-65px;border-radius:50% 50% 0 0;background:var(--season-hill);opacity:.85;transform:rotate(-5deg)}.hill-front{bottom:-88px;left:25%;background:var(--season-forest);opacity:.58;transform:rotate(9deg)}.hero-cabin{position:absolute;right:11%;bottom:29px;width:42px;height:29px;background:#40586b;border-radius:2px;box-shadow:inset 12px 0 #60798c}.hero-cabin:before{content:"";position:absolute;left:-7px;top:-15px;border-left:28px solid transparent;border-right:28px solid transparent;border-bottom:19px solid #34465d}.hero-cabin i{position:absolute;width:10px;height:12px;right:8px;top:8px;background:#ffdfac;box-shadow:0 0 18px #ffdfac}
+.dashboard-title{display:flex;justify-content:space-between;align-items:center;margin:20px 2px 9px;color:#34465d}.dashboard-title b{font-size:17px}.dashboard-title button{background:none;color:#667d9b;font-size:13px}
+#haruHomeNotice{border:1px solid #dbe5ee;border-radius:18px;background:#f8fbfe;padding:15px!important;margin:0!important;line-height:1.6}
+.home-quick{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:15px}.home-quick button{min-height:100px;text-align:left;border:1px solid #dae4ed;border-radius:18px;background:linear-gradient(140deg,#fff,#e8edf3);padding:17px 13px;color:#34465d}.home-quick strong{display:block;font-size:18px}.home-quick small{display:block;font-size:12px;margin-top:9px;color:#6b7d8e;line-height:1.4}
+.home-agenda{border-radius:18px;background:#fff;border:1px solid #e0e8f0;padding:12px 15px;color:#34465d}.home-agenda .agenda-line{padding:9px 0;border-bottom:1px solid #edf0f4;font-size:14px}.home-agenda .agenda-line:last-child{border-bottom:0}.home-agenda .agenda-empty{color:#718294;font-size:13px}
+.legacy-home-input{margin-top:15px;border-radius:15px;background:#f0f4f8;padding:10px 14px}.legacy-home-input summary{cursor:pointer;font-size:13px;color:#526b84}.legacy-home-input #ask{margin-top:12px}.legacy-home-input .voice{height:50px}.legacy-home-input .haru-chat-entry{display:none}
+#seasonChoice{display:block;margin-top:9px;width:100%;padding:11px;border:1px solid #dce2e9;border-radius:10px;background:white;color:#34465d}
+nav button.selected{color:#344f73;font-weight:700}
