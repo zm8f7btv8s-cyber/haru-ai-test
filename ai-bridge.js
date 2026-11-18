@@ -11,7 +11,15 @@ let busy=false;
 const actionable=/예약|약속|회의|모임|일정|방문|진료|수업|골프|할\s*일|해야\s*할|잊지\s*말|챙겨|준비해|기억해|메모|적어\s*둬|기록해|작성해|정리해|조사해|비교해|계획\s*세워/;
 const queryOnly=/(알려|보여|브리핑|몇\s*개|뭐\s*있|있어\?|있나요|어때|언제|무엇|뭐야|설명|추천)/;
 const creation=/(등록|추가|저장|예약해|잡아\s*줘|넣어\s*줘|기록해|적어\s*둬|기억해|만들어|해\s*줘|있어|있다|있음|예정|갈\s*거|가야)/;
-function isAction(text){if(queryOnly.test(text)&&!/(등록|추가|저장|예약해|잡아\s*줘)/.test(text))return false;return actionable.test(text)&&creation.test(text)}
+function isAction(text){
+ // '목요일 12시에 화목회 점심 식사 있어' is a statement of a future appointment,
+ // not a question. Ask for confirmation rather than silently saving it.
+ if(/(?:알려\s*줘|보여\s*줘|브리핑|언제(?:야|지|인가)|몇\s*개|뭐\s*있|있어\s*\?|있나요|어때|설명|추천)/.test(text)&&!/(등록|추가|저장|예약해|잡아\s*줘)/.test(text))return false;
+ const dated=/(?:오늘|내일|모레|이번\s*주|다음\s*주|월요일|화요일|수요일|목요일|금요일|토요일|일요일|\d{1,2}월\s*\d{1,2}일|\d{4}-\d{2}-\d{2})/.test(text);
+ const event=/(?:약속|예약|모임|회의|식사|점심|저녁|병원|진료|수업|방문|골프|화목회|행사)/.test(text);
+ if(dated&&event&&/(?:있어|있다|있음|예정|하기로|잡혔|갈\s*거|가야|만나)/.test(text))return true;
+ return actionable.test(text)&&creation.test(text)
+}
 function read(){try{const s=JSON.parse(localStorage.getItem(KEY)||'null');return s&&typeof s==='object'&&Array.isArray(s.messages)?s:null}catch{return null}}
 function append(who,text){const s=read();if(!s)throw Error('대화 저장소를 읽을 수 없어요');s.messages.push({who,text});localStorage.setItem(KEY,JSON.stringify(s));}
 function showChat(){document.querySelector('[data-go="chat"]')?.click(); // fallback: the chat section has no dedicated nav button
@@ -19,7 +27,7 @@ if(!document.getElementById('chat').classList.contains('active')){
  document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id==='chat'));
  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('selected'));
 }
-render();window.scrollTo(0,0)}
+render();requestAnimationFrame(()=>{const root=$('messages');root.scrollTop=root.scrollHeight;window.scrollTo(0,document.documentElement.scrollHeight)})}
 function render(){const root=$('messages');root.replaceChildren();const s=read();for(const m of s?.messages||[]){const div=document.createElement('div');div.className='bubble'+(m.who==='user'?' mine':'');div.textContent=m.text;root.append(div)}root.scrollTop=root.scrollHeight}
 async function requestAI(message){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),25000);try{
 const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message}),signal:controller.signal});
@@ -41,6 +49,23 @@ async function interpretAI(text){
  if(obj.place.length>160)throw Error('AI 장소가 너무 길어요');
  return {kind:obj.kind,title:obj.title.trim(),date:obj.date,time:obj.time,place:obj.place.trim(),original:text};
 }
+function parseLocalAppointment(text){
+ const now=new Date(),day=['일','월','화','수','목','금','토'];let target=null;
+ const weekday=text.match(/(?:이번\s*주|다음\s*주)?\s*([월화수목금토일])요일/);
+ if(weekday){const w=day.indexOf(weekday[1]);let offset=(w-now.getDay()+7)%7;if(/다음\s*주/.test(text))offset+=offset===0?7:7;target=new Date(now.getFullYear(),now.getMonth(),now.getDate()+offset)}
+ else if(/모레/.test(text))target=new Date(now.getFullYear(),now.getMonth(),now.getDate()+2);
+ else if(/내일/.test(text))target=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1);
+ else if(/오늘/.test(text))target=now;
+ const explicit=text.match(/(\d{1,2})월\s*(\d{1,2})일/);
+ if(explicit){target=new Date(now.getFullYear(),Number(explicit[1])-1,Number(explicit[2]));if(target<new Date(now.getFullYear(),now.getMonth(),now.getDate()))target.setFullYear(target.getFullYear()+1)}
+ if(!target||!/(약속|예약|모임|회의|식사|점심|저녁|진료|병원|화목회)/.test(text))return null;
+ const pad=n=>String(n).padStart(2,'0');const date=[target.getFullYear(),pad(target.getMonth()+1),pad(target.getDate())].join('-');
+ const tm=text.match(/(오전|오후|아침|저녁|낮)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/);let time='';if(tm){let h=Number(tm[2]);if(/오후|저녁/.test(tm[1]||'')&&h<12)h+=12;if(/오전|아침/.test(tm[1]||'')&&h===12)h=0;if(h<24)time=pad(h)+':'+pad(Number(tm[3]||0))}
+ const pm=text.match(/장소(?:는|가|은)?\s*([^.,\n]+?)(?:\s*(?:이야|야|입니다|이에요|예요|에서야|에서)|[.!?]|$)/);
+ let place=pm?pm[1].trim().replace(/에서$/,''):'';
+ let title=text.replace(/장소(?:는|가|은)?[^.,\n]+/,'').replace(/(?:이번\s*주|다음\s*주)?\s*[월화수목금토일]요일/g,'').replace(/\d{1,2}월\s*\d{1,2}일/g,'').replace(/오늘|내일|모레/g,'').replace(/(?:오전|오후|아침|저녁|낮)?\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?/g,'').replace(/(?:있어|있다|있음|예정이야|예정|등록해\s*줘|추가해\s*줘)[.!?]*$/,'').trim();
+ if(!title)title='새 일정';return {kind:'events',title,date,time,place,original:text}
+}
 async function handle(form,original,input){if(busy)return;const text=input.value.trim();if(!text)return;
  if(text.length>2000){alert('요청은 2,000자 이내로 입력해 줘.');return}
  busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button');send.disabled=true;chatButton.disabled=true;
@@ -48,8 +73,8 @@ async function handle(form,original,input){if(busy)return;const text=input.value
   if(isAction(text)){
    lastRequest=text;
    const indicator=$('speechStatus');indicator.textContent='AI가 요청을 분석하는 중…';
-   try{const item=await interpretAI(text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();append('user',text);window.HaruShowAIProposal(item);indicator.textContent='AI 분석 완료 · 확인창에서 저장 여부를 결정해 줘.'}
-   catch(err){indicator.textContent='AI 분석 실패 · 기존 방식으로 전환했어 ('+err.message+')';original.call(form,{preventDefault(){},currentTarget:form,target:form});}
+   try{const item=parseLocalAppointment(text)||await interpretAI(text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();append('user',text);window.HaruShowAIProposal(item);indicator.textContent='AI 분석 완료 · 확인창에서 저장 여부를 결정해 줘.'}
+   catch(err){indicator.textContent='AI 분석 실패 · 안전한 입력 확인창으로 전환해요 ('+err.message+')';const local=parseLocalAppointment(text);if(local){input.value='';append('user',text);window.HaruShowAIProposal(local)}else{original.call(form,{preventDefault(){},currentTarget:form,target:form})}}
    return;
   }
   append('user',text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();showChat();const pending=document.createElement('div');pending.className='bubble ai-pending';pending.textContent='하루가 답변을 준비하고 있어요…';$('messages').append(pending);
