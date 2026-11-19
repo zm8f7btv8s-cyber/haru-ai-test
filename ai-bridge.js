@@ -7,6 +7,8 @@ const originalChat=$('chatForm').onsubmit;
 let lastRequest='';
 let busy=false;
 let pendingWeather=false;let pendingEvent=null;let lastHomeQuestion='';
+try{const saved=JSON.parse(sessionStorage.getItem('haru.pending.v3k')||'null');if(saved&&saved.item&&Date.now()-saved.at<3600000)pendingEvent=saved.item}catch{}
+function setPending(item){pendingEvent=item;try{if(item)sessionStorage.setItem('haru.pending.v3k',JSON.stringify({item,at:Date.now()}));else sessionStorage.removeItem('haru.pending.v3k')}catch{}}
 const queued=[];
 const localToday=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 function localAgenda(text){
@@ -63,6 +65,21 @@ async function interpretAI(text){
  if(obj.place.length>160)throw Error('AI 장소가 너무 길어요');
  return {kind:obj.kind,title:obj.title.trim(),date:obj.date,time:obj.time,place:obj.place.trim(),original:text};
 }
+// The AI decides meaning from context; local code validates and executes only supported actions.
+async function decideIntent(text){
+ const history=(read().messages||[]).slice(-10).map(x=>({role:x.who==='user'?'user':'assistant',text:String(x.text||'').slice(0,350)}));
+ const context={pendingSchedule:pendingEvent?{title:pendingEvent.title,date:pendingEvent.date,time:pendingEvent.time,place:pendingEvent.place}:null,pendingWeather,history,currentUtterance:text};
+ const prompt='당신은 하루 개인비서의 의도 판단기입니다. 아래 대화 문맥을 읽고 사용자의 *현재 발화*가 무엇을 의미하는지 JSON 하나로만 반환하세요. action은 confirm(대기 중인 일정 등록에 동의), cancel(대기 일정 취소), revise(대기 일정의 날짜/시간/제목/장소 수정), create(새 일정/할 일/메모/작업 생성 의도), weather(날씨 질문), chat(일반 질문) 중 하나입니다. 단순한 응/오케이/그렇게 하자 같은 표현도 앞선 질문에 따라 판단하세요. 대기 중인 일정이 없다면 confirm/cancel/revise 금지. 수정과 동의를 동시에 말하면 revise를 우선하세요. 애매하면 chat으로 판단하세요. JSON 스키마: {"action":"confirm|cancel|revise|create|weather|chat","reason":"짧은 근거"}. 현재 날짜 '+localToday()+', 시간대 Asia/Seoul. 맥락: '+JSON.stringify(context);
+ const parsed=extractJSON(await requestAI(prompt));
+ if(!['confirm','cancel','revise','create','weather','chat'].includes(parsed.action))throw Error('AI 의도 판단 형식 오류');
+ if(!pendingEvent&&['confirm','cancel','revise'].includes(parsed.action))return 'chat';
+ return parsed.action;
+}
+async function revisePending(text){
+ const prompt='당신은 일정 수정기입니다. 기존 일정과 사용자의 수정 요청을 반영해 JSON만 반환하세요. 기존 정보에서 요청하지 않은 항목은 유지하고 추측하지 마세요. 스키마 {"kind":"events","title":"문자열","date":"YYYY-MM-DD 또는 빈 문자열","time":"HH:MM 또는 빈 문자열","place":"문자열"}. 한국 날짜 '+localToday()+' Asia/Seoul. 기존: '+JSON.stringify(pendingEvent)+' 수정 요청: '+JSON.stringify(text);
+ const obj=extractJSON(await requestAI(prompt));if(obj.kind!=='events'||typeof obj.title!=='string'||!obj.title.trim()||typeof obj.place!=='string'||typeof obj.date!=='string'||typeof obj.time!=='string'||(obj.date&&!validDate(obj.date))||(obj.time&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(obj.time)))throw Error('수정 결과를 검증하지 못했어');
+ return {...pendingEvent,title:obj.title.slice(0,160),date:obj.date,time:obj.time,place:obj.place.slice(0,160)};
+}
 function parseLocalAppointment(text){
  const now=new Date(),day=['일','월','화','수','목','금','토'];let target=null;
  const weekday=text.match(/(?:이번\s*주|다음\s*주)?\s*([월화수목금토일])요일/);
@@ -90,15 +107,17 @@ async function handle(form,original,input){const text=input.value.trim();if(!tex
  if(text.length>2000){alert('요청은 2,000자 이내로 입력해 줘.');return}
  busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button[type=submit]');send.disabled=false;chatButton.disabled=false;
  try{
-  // Follow-up answers must retain the previous intent and its extracted details.
-  const affirmative=/^(?:응|네|예|그래|좋아|등록해\s*줘|저장해\s*줘|그렇게\s*해|맞아)[.!\s]*$/.test(text);
-  const negative=/^(?:아니|취소|등록하지\s*마|그만)[.!\s]*$/.test(text);
-  if(pendingEvent&&(affirmative||negative||/^(?:아니[,.]?\s*)?(?:오전|오후)?\s*\d{1,2}\s*시/.test(text))){
+  // Interpret a short reply against the pending action, not a fixed list of OK words.
+  let aiIntent=null;
+  if(pendingEvent){
+   try{aiIntent=await decideIntent(text)}catch(err){console.warn('Intent decision unavailable',err);aiIntent='chat'}
+   if(['confirm','cancel','revise'].includes(aiIntent)){
     append('user',text);input.value='';if(home)window.HaruLegacyVoice?.reset();
-    if(negative){pendingEvent=null;say('알겠어. 일정 등록을 취소할게.',fromVoice);return}
-    if(affirmative){window.HaruShowAIProposal(pendingEvent);say('일정 내용을 확인하고 등록하기를 눌러 줘.',fromVoice);pendingEvent=null;return}
-    const t=text.match(/(오전|오후)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/);
-    if(t){let h=Number(t[2]);if(t[1]==='오후'&&h<12)h+=12;if(t[1]==='오전'&&h===12)h=0;pendingEvent.time=String(h).padStart(2,'0')+':'+String(Number(t[3]||0)).padStart(2,'0');say('시간을 '+t[2]+'시 '+(t[3]||'')+'분으로 고쳤어. 등록할까?',fromVoice);return}
+    if(aiIntent==='cancel'){setPending(null);say('알겠어. 일정 등록을 취소할게.',fromVoice);return}
+    if(aiIntent==='confirm'){const item=pendingEvent;setPending(null);window.HaruShowAIProposal(item);say('좋아. 일정 정보를 확인하고 등록하기를 누르면 저장할게.',fromVoice);return}
+    try{setPending(await revisePending(text));say('수정했어. '+(pendingEvent.date||'날짜 미정')+' '+(pendingEvent.time||'시간 미정')+' '+pendingEvent.title+' 일정으로 등록할까?',fromVoice)}catch(err){say('수정 내용을 확실히 이해하지 못했어. 날짜나 시간을 다시 말해 줄래?',fromVoice)}
+    return;
+   }
   }
   if(pendingWeather&&/^(?:대전|서울|부산|인천|대구|광주|울산|세종|제주|수원|청주|천안|공주|성남|용인|고양|전주|춘천|강릉)(?:시|지역)?[.!\s]*$/.test(text)){
     pendingWeather=false;append('user',text);input.value='';if(home)window.HaruLegacyVoice?.reset();
@@ -109,18 +128,18 @@ async function handle(form,original,input){const text=input.value.trim();if(!tex
     const location=text.match(/(대전|서울|부산|인천|대구|광주|울산|세종|제주|수원|청주|천안|공주|성남|용인|고양|전주|춘천|강릉)/);
     if(!location){pendingWeather=true;say('어느 지역 날씨를 알려줄까?',fromVoice)}else{pendingWeather=false;say(location[1]+'의 실시간 날씨 데이터가 아직 연결되지 않았어. 확인되지 않은 기온을 만들어 말하지는 않을게.',fromVoice)}return;
   }
-  if(/^(?:일정으로\s*)?(?:등록|저장)(?:해\s*줘|해|해줄래)?[.!\s]*$/.test(text)&&pendingEvent){append('user',text);input.value='';if(home)window.HaruLegacyVoice?.reset();window.HaruShowAIProposal(pendingEvent);pendingEvent=null;say('일정 내용을 확인한 다음 등록하기를 눌러 줘.',fromVoice);return}
-  if(isAction(text)){
+  if(aiIntent===null){try{aiIntent=await decideIntent(text)}catch(err){console.warn('AI intent unavailable, conservative fallback',err);aiIntent=isAction(text)?'create':'chat'}}
+  if(aiIntent==='create'){
    lastRequest=text;
    const indicator=$('speechStatus');indicator.textContent='AI가 요청을 분석하는 중…';
-   try{const item=parseLocalAppointment(text)||await interpretAI(text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();append('user',text);if(fromVoice&&item.kind==='events'){pendingEvent=item;const response=(item.date||'날짜 미정')+' '+(item.time||'시간 미정')+' '+item.title+' 일정이구나. 등록할까?';say(response,true)}else window.HaruShowAIProposal(item);indicator.textContent='일정 내용을 확인했어.'}
-   catch(err){indicator.textContent='AI 분석 실패 · 안전한 입력 확인창으로 전환해요 ('+err.message+')';const local=parseLocalAppointment(text);if(local){input.value='';append('user',text);if(fromVoice){pendingEvent=local;say((local.date||'날짜 미정')+' '+(local.time||'시간 미정')+' '+local.title+' 일정이구나. 등록할까?',true)}else window.HaruShowAIProposal(local)}else{original.call(form,{preventDefault(){},currentTarget:form,target:form})}}
+   try{const item=await interpretAI(text).catch(()=>parseLocalAppointment(text));if(!item)throw Error("일정 정보를 분석하지 못했어");input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();append('user',text);if(fromVoice&&item.kind==='events'){setPending(item);const response=(item.date||'날짜 미정')+' '+(item.time||'시간 미정')+' '+item.title+' 일정이구나. 등록할까?';say(response,true)}else window.HaruShowAIProposal(item);indicator.textContent='일정 내용을 확인했어.'}
+   catch(err){indicator.textContent='AI 분석 실패 · 안전한 입력 확인창으로 전환해요 ('+err.message+')';const local=parseLocalAppointment(text);if(local){input.value='';append('user',text);if(fromVoice){setPending(local);say((local.date||'날짜 미정')+' '+(local.time||'시간 미정')+' '+local.title+' 일정이구나. 등록할까?',true)}else window.HaruShowAIProposal(local)}else{original.call(form,{preventDefault(){},currentTarget:form,target:form})}}
    return;
   }
   const requestId=globalThis.crypto?.randomUUID?.()||String(Date.now())+Math.random();
   window.dispatchEvent(new CustomEvent('haru:question-start',{detail:{requestId,fromVoice,text}}));
   append('user',text);input.value='';if(input===$('askText')){window.HaruLegacyVoice?.reset();showHomeReply('답변을 준비하고 있어요…')}else{showChat();const pending=document.createElement('div');pending.className='bubble ai-pending';pending.textContent='하루가 답변을 준비하고 있어요…';$('messages').append(pending)}
-  try{const reply=localAgenda(text)??await requestAI(text);append('assistant',reply);if(form.id==='ask')showHomeReply(reply);else render();window.dispatchEvent(new CustomEvent('haru:answer-ready',{detail:{requestId,fromVoice,text:reply}}))}catch(err){append('assistant','AI 서버 연결에 실패했어요. '+err.message+' 다시 시도해 주세요.');if(form.id==='ask')showHomeReply('AI 서버 연결에 실패했어요. '+err.message);else render();window.dispatchEvent(new CustomEvent('haru:answer-error',{detail:{requestId}}))}
+  try{const reply=localAgenda(text)??await requestAI(pendingEvent?'다음 대화에서 사용자의 마지막 말에 답하세요. 아직 등록 대기 중인 일정이 있으며 실제로 저장하지 않았습니다. 사용자의 발화가 동의인지 불명확하면 다시 물으세요. 저장했다고 주장하지 마세요. 대기 일정: '+JSON.stringify(pendingEvent)+'\n사용자: '+text: text);append('assistant',reply);if(form.id==='ask')showHomeReply(reply);else render();window.dispatchEvent(new CustomEvent('haru:answer-ready',{detail:{requestId,fromVoice,text:reply}}))}catch(err){append('assistant','AI 서버 연결에 실패했어요. '+err.message+' 다시 시도해 주세요.');if(form.id==='ask')showHomeReply('AI 서버 연결에 실패했어요. '+err.message);else render();window.dispatchEvent(new CustomEvent('haru:answer-error',{detail:{requestId}}))}
  }catch(err){try{append('assistant','요청을 처리하지 못했어. '+err.message+' 다시 질문해 줘.');showChat()}catch{}const status=$('chatSpeechStatus')||$('speechStatus');if(status)status.textContent='요청 오류 · 다시 질문할 수 있어.';console.error('Haru request error',err)}finally{busy=false;send.disabled=false;chatButton.disabled=false;const next=queued.shift();if(next){next.input.value=next.text;void handle(next.form,next.original,next.input)}}
 }
 $('ask').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('ask'),originalHome,$('askText'))};
