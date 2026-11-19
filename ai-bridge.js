@@ -32,8 +32,8 @@ function isAction(text){
  if(dated&&event&&/(?:있어|있다|있음|예정|하기로|잡혔|갈\s*거|가야|만나)/.test(text))return true;
  return actionable.test(text)&&creation.test(text)
 }
-function read(){try{const s=JSON.parse(localStorage.getItem(KEY)||'null');return s&&typeof s==='object'&&Array.isArray(s.messages)?s:null}catch{return null}}
-function append(who,text){const s=read();if(!s)throw Error('대화 저장소를 읽을 수 없어요');s.messages.push({who,text,createdAt:new Date().toISOString()});localStorage.setItem(KEY,JSON.stringify(s));}
+function read(){const s=window.HaruStore.read();return Array.isArray(s.messages)?s:{...s,messages:[]}}
+function append(who,text){window.HaruStore.append(who,text)}
 function showChat(){document.querySelector('[data-go="chat"]')?.click(); // fallback: the chat section has no dedicated nav button
 if(!document.getElementById('chat').classList.contains('active')){
  document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id==='chat'));
@@ -82,7 +82,7 @@ async function handle(form,original,input){const text=input.value.trim();if(!tex
  const fromVoice=!!window.HaruLegacyVoice?.wasVoiceInput?.(text);
  if(busy){queued.push({form,original,input,text});input.value='';const status=$('chatSpeechStatus')||$('speechStatus');if(status)status.textContent='이전 요청 처리 중 · 다음 질문을 대기열에 추가했어.';return;}
  if(text.length>2000){alert('요청은 2,000자 이내로 입력해 줘.');return}
- busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button');send.disabled=false;chatButton.disabled=false;
+ busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button[type=submit]');send.disabled=false;chatButton.disabled=false;
  try{
   if(isAction(text)){
    lastRequest=text;

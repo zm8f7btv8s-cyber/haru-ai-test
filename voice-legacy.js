@@ -29,12 +29,12 @@ function begin(target){if(listening())return;const field=$(target==='chat'?'chat
 function cycle(s){if(session!==s||!s.active)return;const r=new SR();s.recognition=r;s.error='';s.cycleFinal='';s.interim='';r.lang='ko-KR';r.interimResults=true;r.continuous=true;
  r.onresult=e=>{if(session!==s||s.recognition!==r||!s.active)return;let f='',i='';for(let n=0;n<e.results.length;n++){const v=e.results[n][0]?.transcript||'';if(e.results[n].isFinal)f+=v+' ';else i+=v+' '}s.cycleFinal=f.trim();s.interim=i.trim();if(f||i){s.heard=true;compose(s);schedule(s)}};
  r.onerror=e=>{s.error=e.error||'unknown'};
- r.onend=()=>{if(session!==s||s.recognition!==r||!s.active)return;s.final=[s.final,s.cycleFinal||s.interim].filter(Boolean).join(' ').trim();s.cycleFinal='';s.interim='';s.recognition=null;compose(s);
+ r.onend=()=>{if(session!==s||s.recognition!==r||!s.active)return;{const fragment=s.cycleFinal||s.interim;if(fragment&&!(s.final===fragment||s.final.endsWith(' '+fragment)))s.final=[s.final,fragment].filter(Boolean).join(' ').trim();}s.cycleFinal='';s.interim='';s.recognition=null;compose(s);
  if(['not-allowed','service-not-allowed','audio-capture','network'].includes(s.error)){s.active=false;clearTimer();ui('음성 인식이 중단됐어요. 권한이나 연결을 확인해 주세요.');tone('end');return}
  if(s.failures++<2){s.restart=setTimeout(()=>cycle(s),350)}else{s.active=false;clearTimer();tone('end');ui('인식이 종료됐어요. 내용을 확인하고 전송해 주세요.')}};
  try{r.start()}catch{s.active=false;clearTimer();ui('마이크를 시작하지 못했어요. 다시 눌러 주세요.')}}
 function finish(){const s=session;if(!listening())return;clearTimer();s.active=false;clearTimeout(s.restart);tone('end');const r=s.recognition;
- const done=()=>{if(session!==s)return;s.final=[s.final,s.cycleFinal||s.interim].filter(Boolean).join(' ').trim();s.cycleFinal='';s.interim='';compose(s);s.recognition=null;ui('인식 완료 · 내용을 확인하고 전송해 주세요.');s.field.focus()};
+ const done=()=>{if(session!==s||s.finished)return;s.finished=true;{const fragment=s.cycleFinal||s.interim;if(fragment&&!(s.final===fragment||s.final.endsWith(' '+fragment)))s.final=[s.final,fragment].filter(Boolean).join(' ').trim();}s.cycleFinal='';s.interim='';compose(s);s.recognition=null;ui('인식 완료 · 내용을 확인하고 전송해 주세요.');s.field.focus()};
  if(r){r.onresult=e=>{let f='',i='';for(let n=0;n<e.results.length;n++){const v=e.results[n][0]?.transcript||'';if(e.results[n].isFinal)f+=v+' ';else i+=v+' '}s.cycleFinal=f.trim();s.interim=i.trim();compose(s)};r.onend=done;try{r.stop()}catch{stopRecognizer(s,true);done()};ui('음성 인식을 마무리하고 있어요…')}else done();}
 function cancel(){const s=session;if(!listening())return;stopRecognizer(s,true);s.active=false;session=null;s.field.value=s.base;lastVoice='';lastCombined='';s.field.dispatchEvent(new Event('input',{bubbles:true}));tone('end');ui('음성 입력을 취소했어요.');(s.target==='chat'?chatStatus:homeStatus).textContent='음성 입력을 취소했어요.';s.field.focus()}
 homeMic.addEventListener('click',()=>listening()?cancel():begin('home'));
