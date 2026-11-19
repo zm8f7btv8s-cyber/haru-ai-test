@@ -189,3 +189,7 @@ nav button span {
   margin-top: 2px !important;
 }
 #app {padding-bottom: 110px !important;}
+
+/* Haru 3.0-A: voice completion is visible only while recording */
+#chatVoiceDone[hidden]{display:none!important}
+#chatVoiceDone:not([hidden]){white-space:nowrap;flex:0 0 auto;padding-inline:10px}

@@ -82,7 +82,7 @@ async function handle(form,original,input){if(busy)return;const text=input.value
  }catch(err){alert('요청 처리 오류: '+err.message)}finally{busy=false;send.disabled=false;chatButton.disabled=false}
 }
 $('ask').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('ask'),originalHome,$('askText'))};
-$('chatForm').onsubmit=e=>{e.preventDefault();void handle($('chatForm'),originalChat,$('chatText'))};
+$('chatForm').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('chatForm'),originalChat,$('chatText'))};
 $('aiTest').onclick=async()=>{const b=$('aiTest'),s=$('aiTestStatus');b.disabled=true;s.textContent='서버 응답 확인 중…';try{const r=await requestAI('연결 테스트입니다. 한국어로 짧게 인사해 주세요.');s.textContent='연결 성공 · '+r.slice(0,160)}catch(e){s.textContent='연결 실패 · '+e.message}finally{b.disabled=false}};
 })();
 
