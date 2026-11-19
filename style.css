@@ -193,3 +193,6 @@ nav button span {
 /* Haru 3.0-A: voice completion is visible only while recording */
 #chatVoiceDone[hidden]{display:none!important}
 #chatVoiceDone:not([hidden]){white-space:nowrap;flex:0 0 auto;padding-inline:10px}
+
+/* 3.0-B: timestamp for new conversations; legacy messages are unchanged */
+.haru-message-time{display:block;font-size:11px;opacity:.62;margin-top:7px;text-align:right;font-weight:400}

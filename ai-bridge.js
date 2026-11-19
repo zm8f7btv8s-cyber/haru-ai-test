@@ -6,6 +6,18 @@ const originalHome=$('ask').onsubmit;
 const originalChat=$('chatForm').onsubmit;
 let lastRequest='';
 let busy=false;
+const queued=[];
+const localToday=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
+function localAgenda(text){
+ if(!/(오늘|내일|모레)/.test(text)||!/(일정|할\s*일|스케줄)/.test(text)||!/(알려|보여|뭐|몇|있어|브리핑)/.test(text))return null;
+ const day=new Date();day.setHours(12,0,0,0);if(/모레/.test(text))day.setDate(day.getDate()+2);else if(/내일/.test(text))day.setDate(day.getDate()+1);
+ const date=[day.getFullYear(),String(day.getMonth()+1).padStart(2,'0'),String(day.getDate()).padStart(2,'0')].join('-');
+ const store=read();if(!store)return '저장된 일정을 불러오지 못했어. 다시 시도해 줘.';
+ const events=(store.events||[]).filter(x=>x.date===date).sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99'));
+ const tasks=(store.tasks||[]).filter(x=>x.date===date&&!x.done);const label=/모레/.test(text)?'모레':/내일/.test(text)?'내일':'오늘';
+ return `${label}(${date}) 일정 ${events.length}건${events.length?'\n'+events.map(x=>'• '+(x.time||'종일')+' '+x.title).join('\n'): '\n등록된 일정이 없어.'}\n미완료 할 일 ${tasks.length}건${tasks.length?'\n'+tasks.map(x=>'• '+x.title).join('\n'):''}`;
+}
+
 // Existing schedule, task, memo and work commands always use the original
 // local confirmation workflow. No AI output is ever automatically saved as an item.
 const actionable=/예약|약속|회의|모임|일정|방문|진료|수업|골프|할\s*일|해야\s*할|잊지\s*말|챙겨|준비해|기억해|메모|적어\s*둬|기록해|작성해|정리해|조사해|비교해|계획\s*세워/;
@@ -21,14 +33,14 @@ function isAction(text){
  return actionable.test(text)&&creation.test(text)
 }
 function read(){try{const s=JSON.parse(localStorage.getItem(KEY)||'null');return s&&typeof s==='object'&&Array.isArray(s.messages)?s:null}catch{return null}}
-function append(who,text){const s=read();if(!s)throw Error('대화 저장소를 읽을 수 없어요');s.messages.push({who,text});localStorage.setItem(KEY,JSON.stringify(s));}
+function append(who,text){const s=read();if(!s)throw Error('대화 저장소를 읽을 수 없어요');s.messages.push({who,text,createdAt:new Date().toISOString()});localStorage.setItem(KEY,JSON.stringify(s));}
 function showChat(){document.querySelector('[data-go="chat"]')?.click(); // fallback: the chat section has no dedicated nav button
 if(!document.getElementById('chat').classList.contains('active')){
  document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.id==='chat'));
  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('selected'));
 }
 render();requestAnimationFrame(()=>{const root=$('messages');root.scrollTop=root.scrollHeight;window.scrollTo(0,document.documentElement.scrollHeight)})}
-function render(){const root=$('messages');root.replaceChildren();const s=read();for(const m of s?.messages||[]){const div=document.createElement('div');div.className='bubble'+(m.who==='user'?' mine':'');div.textContent=m.text;root.append(div)}root.scrollTop=root.scrollHeight}
+function render(){const root=$('messages');root.replaceChildren();const s=read();for(const m of s?.messages||[]){const div=document.createElement('div');div.className='bubble'+(m.who==='user'?' mine':'');div.textContent=m.text;if(m.createdAt){const t=document.createElement('small');t.className='haru-message-time';t.textContent=new Date(m.createdAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});div.append(t)}root.append(div)}root.scrollTop=root.scrollHeight}
 async function requestAI(message){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),25000);try{
 const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message}),signal:controller.signal});
 let body;try{body=await r.json()}catch{throw Error('서버 응답 형식을 확인할 수 없어요')}
@@ -66,9 +78,10 @@ function parseLocalAppointment(text){
  let title=text.replace(/장소(?:는|가|은)?[^.,\n]+/,'').replace(/(?:이번\s*주|다음\s*주)?\s*[월화수목금토일]요일/g,'').replace(/\d{1,2}월\s*\d{1,2}일/g,'').replace(/오늘|내일|모레/g,'').replace(/(?:오전|오후|아침|저녁|낮)?\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?/g,'').replace(/(?:있어|있다|있음|예정이야|예정|등록해\s*줘|추가해\s*줘)[.!?]*$/,'').trim();
  if(!title)title='새 일정';return {kind:'events',title,date,time,place,original:text}
 }
-async function handle(form,original,input){if(busy)return;const text=input.value.trim();if(!text)return;
+async function handle(form,original,input){const text=input.value.trim();if(!text)return;
+ if(busy){queued.push({form,original,input,text});input.value='';const status=$('chatSpeechStatus')||$('speechStatus');if(status)status.textContent='이전 요청 처리 중 · 다음 질문을 대기열에 추가했어.';return;}
  if(text.length>2000){alert('요청은 2,000자 이내로 입력해 줘.');return}
- busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button');send.disabled=true;chatButton.disabled=true;
+ busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button');send.disabled=false;chatButton.disabled=false;
  try{
   if(isAction(text)){
    lastRequest=text;
@@ -78,8 +91,8 @@ async function handle(form,original,input){if(busy)return;const text=input.value
    return;
   }
   append('user',text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();showChat();const pending=document.createElement('div');pending.className='bubble ai-pending';pending.textContent='하루가 답변을 준비하고 있어요…';$('messages').append(pending);
-  try{const reply=await requestAI(text);append('assistant',reply)}catch(err){append('assistant','AI 서버 연결에 실패했어요. '+err.message+' 다시 시도해 주세요.')}render();
- }catch(err){alert('요청 처리 오류: '+err.message)}finally{busy=false;send.disabled=false;chatButton.disabled=false}
+  try{const reply=localAgenda(text)??await requestAI(text);append('assistant',reply)}catch(err){append('assistant','AI 서버 연결에 실패했어요. '+err.message+' 다시 시도해 주세요.')}render();
+ }catch(err){alert('요청 처리 오류: '+err.message)}finally{busy=false;send.disabled=false;chatButton.disabled=false;const next=queued.shift();if(next){next.input.value=next.text;void handle(next.form,next.original,next.input)}}
 }
 $('ask').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('ask'),originalHome,$('askText'))};
 $('chatForm').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('chatForm'),originalChat,$('chatText'))};
