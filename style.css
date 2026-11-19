@@ -203,3 +203,6 @@ nav button span {
 .haru-chat-entry.mine{align-items:flex-end}
 .haru-chat-entry .bubble{max-width:88%;margin-bottom:0}
 .haru-chat-entry .haru-message-time{font-size:10px;margin-top:3px;color:#758293;opacity:.85;text-align:right;padding:0 4px}
+
+/* 3.0-I: home response stays on the home screen */
+.haru-home-reply{margin:10px 0;padding:12px 14px;border:1px solid #cbd9e7;border-radius:14px;background:#edf3f9;color:#344d65;font-size:14px;line-height:1.55}.haru-home-reply p{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.haru-home-reply[hidden]{display:none}

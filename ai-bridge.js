@@ -6,6 +6,7 @@ const originalHome=$('ask').onsubmit;
 const originalChat=$('chatForm').onsubmit;
 let lastRequest='';
 let busy=false;
+let pendingWeather=false;let pendingEvent=null;let lastHomeQuestion='';
 const queued=[];
 const localToday=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 function localAgenda(text){
@@ -40,6 +41,7 @@ if(!document.getElementById('chat').classList.contains('active')){
  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('selected'));
 }
 render();requestAnimationFrame(()=>{const root=$('messages');root.scrollTop=root.scrollHeight;window.scrollTo(0,document.documentElement.scrollHeight)})}
+function showHomeReply(reply){const panel=$('haruHomeReply');if(!panel)return;panel.hidden=false;const body=$('haruHomeReplyText');body.textContent=reply;panel.scrollIntoView({block:'nearest',behavior:'smooth'});}
 function render(){window.HaruRenderConversation(read()?.messages||[],$('messages'))}
 async function requestAI(message){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),25000);try{
 const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message}),signal:controller.signal});
@@ -70,31 +72,55 @@ function parseLocalAppointment(text){
  else if(/오늘/.test(text))target=now;
  const explicit=text.match(/(\d{1,2})월\s*(\d{1,2})일/);
  if(explicit){target=new Date(now.getFullYear(),Number(explicit[1])-1,Number(explicit[2]));if(target<new Date(now.getFullYear(),now.getMonth(),now.getDate()))target.setFullYear(target.getFullYear()+1)}
- if(!target||!/(약속|예약|모임|회의|식사|점심|저녁|진료|병원|화목회)/.test(text))return null;
+ if(!target||!/(약속|예약|모임|회의|식사|점심|저녁|진료|병원|화목회|골프|라운딩)/.test(text))return null;
  const pad=n=>String(n).padStart(2,'0');const date=[target.getFullYear(),pad(target.getMonth()+1),pad(target.getDate())].join('-');
  const tm=text.match(/(오전|오후|아침|저녁|낮)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/);let time='';if(tm){let h=Number(tm[2]);if(/오후|저녁/.test(tm[1]||'')&&h<12)h+=12;if(/오전|아침/.test(tm[1]||'')&&h===12)h=0;if(h<24)time=pad(h)+':'+pad(Number(tm[3]||0))}
+ const golfPlace=text.match(/([가-힣A-Za-z0-9 ]{2,30}\s*(?:CC|cc|골프장))/);
  const pm=text.match(/장소(?:는|가|은)?\s*([^.,\n]+?)(?:\s*(?:이야|야|입니다|이에요|예요|에서야|에서)|[.!?]|$)/);
- let place=pm?pm[1].trim().replace(/에서$/,''):'';
+ let place=pm?pm[1].trim().replace(/에서$/,''):(golfPlace?golfPlace[1].trim():'');
  let title=text.replace(/장소(?:는|가|은)?[^.,\n]+/,'').replace(/(?:이번\s*주|다음\s*주)?\s*[월화수목금토일]요일/g,'').replace(/\d{1,2}월\s*\d{1,2}일/g,'').replace(/오늘|내일|모레/g,'').replace(/(?:오전|오후|아침|저녁|낮)?\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?/g,'').replace(/(?:있어|있다|있음|예정이야|예정|등록해\s*줘|추가해\s*줘)[.!?]*$/,'').trim();
- if(!title)title='새 일정';return {kind:'events',title,date,time,place,original:text}
+ title=title.replace(/\s*(?:에\s*있어|이야|이구나|에\s*있다)\s*$/,'').trim();if(!title)title='새 일정';return {kind:'events',title,date,time,place,original:text}
 }
 async function handle(form,original,input){const text=input.value.trim();if(!text)return;
+ const home=form.id==='ask';
+ const say=(answer,voice=false)=>{append('assistant',answer);if(home)showHomeReply(answer);else render();if(voice){const requestId=String(Date.now())+Math.random();window.dispatchEvent(new CustomEvent('haru:question-start',{detail:{requestId,fromVoice:true,text}}));window.dispatchEvent(new CustomEvent('haru:answer-ready',{detail:{requestId,fromVoice:true,text:answer}}))}};
+
  const fromVoice=!!window.HaruLegacyVoice?.consumeVoiceSubmit?.(form.id==='chatForm'?'chat':'home',text);
  if(busy){queued.push({form,original,input,text});input.value='';const status=$('chatSpeechStatus')||$('speechStatus');if(status)status.textContent='이전 요청 처리 중 · 다음 질문을 대기열에 추가했어.';return;}
  if(text.length>2000){alert('요청은 2,000자 이내로 입력해 줘.');return}
  busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button[type=submit]');send.disabled=false;chatButton.disabled=false;
  try{
+  // Follow-up answers must retain the previous intent and its extracted details.
+  const affirmative=/^(?:응|네|예|그래|좋아|등록해\s*줘|저장해\s*줘|그렇게\s*해|맞아)[.!\s]*$/.test(text);
+  const negative=/^(?:아니|취소|등록하지\s*마|그만)[.!\s]*$/.test(text);
+  if(pendingEvent&&(affirmative||negative||/^(?:아니[,.]?\s*)?(?:오전|오후)?\s*\d{1,2}\s*시/.test(text))){
+    append('user',text);input.value='';if(home)window.HaruLegacyVoice?.reset();
+    if(negative){pendingEvent=null;say('알겠어. 일정 등록을 취소할게.',fromVoice);return}
+    if(affirmative){window.HaruShowAIProposal(pendingEvent);say('일정 내용을 확인하고 등록하기를 눌러 줘.',fromVoice);pendingEvent=null;return}
+    const t=text.match(/(오전|오후)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/);
+    if(t){let h=Number(t[2]);if(t[1]==='오후'&&h<12)h+=12;if(t[1]==='오전'&&h===12)h=0;pendingEvent.time=String(h).padStart(2,'0')+':'+String(Number(t[3]||0)).padStart(2,'0');say('시간을 '+t[2]+'시 '+(t[3]||'')+'분으로 고쳤어. 등록할까?',fromVoice);return}
+  }
+  if(pendingWeather&&/^(?:대전|서울|부산|인천|대구|광주|울산|세종|제주|수원|청주|천안|공주|성남|용인|고양|전주|춘천|강릉)(?:시|지역)?[.!\s]*$/.test(text)){
+    pendingWeather=false;append('user',text);input.value='';if(home)window.HaruLegacyVoice?.reset();
+    say(text.replace(/[.!\s]/g,'')+'의 실시간 날씨를 확인할 수 있는 데이터 연결이 아직 없어. 기온을 추측해 알려주지는 않을게.',fromVoice);return;
+  }
+  if(/(?:날씨|기온|온도)/.test(text)){
+    append('user',text);input.value='';if(home)window.HaruLegacyVoice?.reset();
+    const location=text.match(/(대전|서울|부산|인천|대구|광주|울산|세종|제주|수원|청주|천안|공주|성남|용인|고양|전주|춘천|강릉)/);
+    if(!location){pendingWeather=true;say('어느 지역 날씨를 알려줄까?',fromVoice)}else{pendingWeather=false;say(location[1]+'의 실시간 날씨 데이터가 아직 연결되지 않았어. 확인되지 않은 기온을 만들어 말하지는 않을게.',fromVoice)}return;
+  }
+  if(/^(?:일정으로\s*)?(?:등록|저장)(?:해\s*줘|해|해줄래)?[.!\s]*$/.test(text)&&pendingEvent){append('user',text);input.value='';if(home)window.HaruLegacyVoice?.reset();window.HaruShowAIProposal(pendingEvent);pendingEvent=null;say('일정 내용을 확인한 다음 등록하기를 눌러 줘.',fromVoice);return}
   if(isAction(text)){
    lastRequest=text;
    const indicator=$('speechStatus');indicator.textContent='AI가 요청을 분석하는 중…';
-   try{const item=parseLocalAppointment(text)||await interpretAI(text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();append('user',text);window.HaruShowAIProposal(item);indicator.textContent='AI 분석 완료 · 확인창에서 저장 여부를 결정해 줘.'}
-   catch(err){indicator.textContent='AI 분석 실패 · 안전한 입력 확인창으로 전환해요 ('+err.message+')';const local=parseLocalAppointment(text);if(local){input.value='';append('user',text);window.HaruShowAIProposal(local)}else{original.call(form,{preventDefault(){},currentTarget:form,target:form})}}
+   try{const item=parseLocalAppointment(text)||await interpretAI(text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();append('user',text);if(fromVoice&&item.kind==='events'){pendingEvent=item;const response=(item.date||'날짜 미정')+' '+(item.time||'시간 미정')+' '+item.title+' 일정이구나. 등록할까?';say(response,true)}else window.HaruShowAIProposal(item);indicator.textContent='일정 내용을 확인했어.'}
+   catch(err){indicator.textContent='AI 분석 실패 · 안전한 입력 확인창으로 전환해요 ('+err.message+')';const local=parseLocalAppointment(text);if(local){input.value='';append('user',text);if(fromVoice){pendingEvent=local;say((local.date||'날짜 미정')+' '+(local.time||'시간 미정')+' '+local.title+' 일정이구나. 등록할까?',true)}else window.HaruShowAIProposal(local)}else{original.call(form,{preventDefault(){},currentTarget:form,target:form})}}
    return;
   }
   const requestId=globalThis.crypto?.randomUUID?.()||String(Date.now())+Math.random();
   window.dispatchEvent(new CustomEvent('haru:question-start',{detail:{requestId,fromVoice,text}}));
-  append('user',text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();showChat();const pending=document.createElement('div');pending.className='bubble ai-pending';pending.textContent='하루가 답변을 준비하고 있어요…';$('messages').append(pending);
-  try{const reply=localAgenda(text)??await requestAI(text);append('assistant',reply);render();window.dispatchEvent(new CustomEvent('haru:answer-ready',{detail:{requestId,fromVoice,text:reply}}))}catch(err){append('assistant','AI 서버 연결에 실패했어요. '+err.message+' 다시 시도해 주세요.');render();window.dispatchEvent(new CustomEvent('haru:answer-error',{detail:{requestId}}))}
+  append('user',text);input.value='';if(input===$('askText')){window.HaruLegacyVoice?.reset();showHomeReply('답변을 준비하고 있어요…')}else{showChat();const pending=document.createElement('div');pending.className='bubble ai-pending';pending.textContent='하루가 답변을 준비하고 있어요…';$('messages').append(pending)}
+  try{const reply=localAgenda(text)??await requestAI(text);append('assistant',reply);if(form.id==='ask')showHomeReply(reply);else render();window.dispatchEvent(new CustomEvent('haru:answer-ready',{detail:{requestId,fromVoice,text:reply}}))}catch(err){append('assistant','AI 서버 연결에 실패했어요. '+err.message+' 다시 시도해 주세요.');if(form.id==='ask')showHomeReply('AI 서버 연결에 실패했어요. '+err.message);else render();window.dispatchEvent(new CustomEvent('haru:answer-error',{detail:{requestId}}))}
  }catch(err){try{append('assistant','요청을 처리하지 못했어. '+err.message+' 다시 질문해 줘.');showChat()}catch{}const status=$('chatSpeechStatus')||$('speechStatus');if(status)status.textContent='요청 오류 · 다시 질문할 수 있어.';console.error('Haru request error',err)}finally{busy=false;send.disabled=false;chatButton.disabled=false;const next=queued.shift();if(next){next.input.value=next.text;void handle(next.form,next.original,next.input)}}
 }
 $('ask').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('ask'),originalHome,$('askText'))};
