@@ -196,3 +196,10 @@ nav button span {
 
 /* 3.0-B: timestamp for new conversations; legacy messages are unchanged */
 .haru-message-time{display:block;font-size:11px;opacity:.62;margin-top:7px;text-align:right;font-weight:400}
+
+/* 3.0-E: compact conversation timestamps and day separators */
+.haru-chat-day{width:max-content;max-width:95%;margin:14px auto 10px;padding:5px 12px;border-radius:999px;background:rgba(96,115,138,.10);color:#66778b;font-size:11px;font-weight:500;text-align:center}
+.haru-chat-entry{display:flex;flex-direction:column;align-items:flex-start;max-width:100%;margin-bottom:9px}
+.haru-chat-entry.mine{align-items:flex-end}
+.haru-chat-entry .bubble{max-width:88%;margin-bottom:0}
+.haru-chat-entry .haru-message-time{font-size:10px;margin-top:3px;color:#758293;opacity:.85;text-align:right;padding:0 4px}

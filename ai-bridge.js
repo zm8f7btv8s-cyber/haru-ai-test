@@ -40,7 +40,7 @@ if(!document.getElementById('chat').classList.contains('active')){
  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('selected'));
 }
 render();requestAnimationFrame(()=>{const root=$('messages');root.scrollTop=root.scrollHeight;window.scrollTo(0,document.documentElement.scrollHeight)})}
-function render(){const root=$('messages');root.replaceChildren();const s=read();for(const m of s?.messages||[]){const div=document.createElement('div');div.className='bubble'+(m.who==='user'?' mine':'');div.textContent=m.text;if(m.createdAt){const t=document.createElement('small');t.className='haru-message-time';t.textContent=new Date(m.createdAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});div.append(t)}root.append(div)}root.scrollTop=root.scrollHeight}
+function render(){window.HaruRenderConversation(read()?.messages||[],$('messages'))}
 async function requestAI(message){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),25000);try{
 const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message}),signal:controller.signal});
 let body;try{body=await r.json()}catch{throw Error('서버 응답 형식을 확인할 수 없어요')}
@@ -79,6 +79,7 @@ function parseLocalAppointment(text){
  if(!title)title='새 일정';return {kind:'events',title,date,time,place,original:text}
 }
 async function handle(form,original,input){const text=input.value.trim();if(!text)return;
+ const fromVoice=!!window.HaruLegacyVoice?.wasVoiceInput?.(text);
  if(busy){queued.push({form,original,input,text});input.value='';const status=$('chatSpeechStatus')||$('speechStatus');if(status)status.textContent='이전 요청 처리 중 · 다음 질문을 대기열에 추가했어.';return;}
  if(text.length>2000){alert('요청은 2,000자 이내로 입력해 줘.');return}
  busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button');send.disabled=false;chatButton.disabled=false;
@@ -90,9 +91,10 @@ async function handle(form,original,input){const text=input.value.trim();if(!tex
    catch(err){indicator.textContent='AI 분석 실패 · 안전한 입력 확인창으로 전환해요 ('+err.message+')';const local=parseLocalAppointment(text);if(local){input.value='';append('user',text);window.HaruShowAIProposal(local)}else{original.call(form,{preventDefault(){},currentTarget:form,target:form})}}
    return;
   }
+  if(fromVoice)window.dispatchEvent(new CustomEvent('haru:voice-question-ready'));
   append('user',text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();showChat();const pending=document.createElement('div');pending.className='bubble ai-pending';pending.textContent='하루가 답변을 준비하고 있어요…';$('messages').append(pending);
   try{const reply=localAgenda(text)??await requestAI(text);append('assistant',reply)}catch(err){append('assistant','AI 서버 연결에 실패했어요. '+err.message+' 다시 시도해 주세요.')}render();
- }catch(err){alert('요청 처리 오류: '+err.message)}finally{busy=false;send.disabled=false;chatButton.disabled=false;const next=queued.shift();if(next){next.input.value=next.text;void handle(next.form,next.original,next.input)}}
+ }catch(err){try{append('assistant','요청을 처리하지 못했어. '+err.message+' 다시 질문해 줘.');showChat()}catch{}const status=$('chatSpeechStatus')||$('speechStatus');if(status)status.textContent='요청 오류 · 다시 질문할 수 있어.';console.error('Haru request error',err)}finally{busy=false;send.disabled=false;chatButton.disabled=false;const next=queued.shift();if(next){next.input.value=next.text;void handle(next.form,next.original,next.input)}}
 }
 $('ask').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('ask'),originalHome,$('askText'))};
 $('chatForm').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('chatForm'),originalChat,$('chatText'))};
