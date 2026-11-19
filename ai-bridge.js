@@ -79,7 +79,7 @@ function parseLocalAppointment(text){
  if(!title)title='새 일정';return {kind:'events',title,date,time,place,original:text}
 }
 async function handle(form,original,input){const text=input.value.trim();if(!text)return;
- const fromVoice=!!window.HaruLegacyVoice?.wasVoiceInput?.(text);
+ const fromVoice=!!window.HaruLegacyVoice?.consumeVoiceSubmit?.(form.id==='chatForm'?'chat':'home',text);
  if(busy){queued.push({form,original,input,text});input.value='';const status=$('chatSpeechStatus')||$('speechStatus');if(status)status.textContent='이전 요청 처리 중 · 다음 질문을 대기열에 추가했어.';return;}
  if(text.length>2000){alert('요청은 2,000자 이내로 입력해 줘.');return}
  busy=true;const send=$('sendAsk');const chatButton=$('chatForm').querySelector('button[type=submit]');send.disabled=false;chatButton.disabled=false;
@@ -91,9 +91,10 @@ async function handle(form,original,input){const text=input.value.trim();if(!tex
    catch(err){indicator.textContent='AI 분석 실패 · 안전한 입력 확인창으로 전환해요 ('+err.message+')';const local=parseLocalAppointment(text);if(local){input.value='';append('user',text);window.HaruShowAIProposal(local)}else{original.call(form,{preventDefault(){},currentTarget:form,target:form})}}
    return;
   }
-  if(fromVoice)window.dispatchEvent(new CustomEvent('haru:voice-question-ready'));
+  const requestId=globalThis.crypto?.randomUUID?.()||String(Date.now())+Math.random();
+  window.dispatchEvent(new CustomEvent('haru:question-start',{detail:{requestId,fromVoice,text}}));
   append('user',text);input.value='';if(input===$('askText'))window.HaruLegacyVoice?.reset();showChat();const pending=document.createElement('div');pending.className='bubble ai-pending';pending.textContent='하루가 답변을 준비하고 있어요…';$('messages').append(pending);
-  try{const reply=localAgenda(text)??await requestAI(text);append('assistant',reply)}catch(err){append('assistant','AI 서버 연결에 실패했어요. '+err.message+' 다시 시도해 주세요.')}render();
+  try{const reply=localAgenda(text)??await requestAI(text);append('assistant',reply);render();window.dispatchEvent(new CustomEvent('haru:answer-ready',{detail:{requestId,fromVoice,text:reply}}))}catch(err){append('assistant','AI 서버 연결에 실패했어요. '+err.message+' 다시 시도해 주세요.');render();window.dispatchEvent(new CustomEvent('haru:answer-error',{detail:{requestId}}))}
  }catch(err){try{append('assistant','요청을 처리하지 못했어. '+err.message+' 다시 질문해 줘.');showChat()}catch{}const status=$('chatSpeechStatus')||$('speechStatus');if(status)status.textContent='요청 오류 · 다시 질문할 수 있어.';console.error('Haru request error',err)}finally{busy=false;send.disabled=false;chatButton.disabled=false;const next=queued.shift();if(next){next.input.value=next.text;void handle(next.form,next.original,next.input)}}
 }
 $('ask').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('ask'),originalHome,$('askText'))};
