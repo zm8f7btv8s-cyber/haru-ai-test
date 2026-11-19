@@ -26,13 +26,13 @@ async function handle(form,input){const text=input.value.trim();if(!text)return;
 try{const result=await decide(text);const action=result.action;const item=result.item;let reply=result.reply.trim();
 if(action==='cancel'&&pending){setPending(null);reply=reply||'알겠어. 등록하지 않을게.'}
 else if(action==='offer'||action==='propose'||action==='revise'){
- if(item&&validItem(item)){setPending(item);if(action==='propose'){window.HaruShowAIProposal(item);reply=reply||'내용을 확인하고 등록하기를 눌러 줘.'}else reply=reply||describe(item)+' 일정으로 등록할까?'}
+ if(item&&validItem(item)){setPending(item);if(action==='propose'){window.HaruShowAIProposal(item);reply='등록 내용을 확인해줘. 저장이 끝나면 완료했다고 알려줄게.'}else reply=reply||describe(item)+' 일정으로 등록할까?'}
  else if(action==='revise'&&pending){reply='수정 내용을 정확히 이해하지 못했어. 다시 말해 줄래?'}
  else reply=reply||'등록할 내용을 조금 더 알려줄래?';
 }
 else if(action==='confirm'){
  const candidate=item&&validItem(item)?item:pending;
- if(candidate&&validItem(candidate)){setPending(null);window.HaruShowAIProposal(candidate);reply='알겠어. '+describe(candidate)+' 내용을 확인하고 등록하기를 누르면 저장할게.'}
+ if(candidate&&validItem(candidate)){setPending(null);window.HaruShowAIProposal(candidate);reply='알겠어. 등록 내용을 확인해줘. 저장이 끝나면 완료했다고 알려줄게.'}
  else reply='어떤 내용을 등록할지 아직 확인하지 못했어. 일정을 알려줄래?';
 }
 else if(action==='agenda'){

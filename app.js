@@ -54,6 +54,18 @@ if(kind==='events'){
  }
 }
 // Commit the record and confirmation together; do not report success until persistence is verified.
-const before=JSON.stringify(state);state[kind].push(item);state.messages.push({who:'assistant',text:`확인한 ${ {events:'일정',tasks:'할 일',notes:'메모',works:'작업'}[kind]}을(를) 이 기기에 저장했어: ${title}`});try{save();const persisted=JSON.parse(localStorage.getItem(key)||'null');if(!persisted||!Array.isArray(persisted[kind])||!persisted[kind].some(x=>String(x.id)===String(item.id)))throw new Error('저장 검증 실패')}catch(err){state=JSON.parse(before);alert('일정을 저장하지 못했어. 다시 시도해 줘.');console.error('Haru save error',err);return}
-pending=null;$('proposal').close();if(kind==='events'||kind==='tasks'){try{show('life')}catch(viewErr){alert('저장은 확인됐지만 화면 이동에 실패했어: '+viewErr.message);console.error(viewErr);return} const target=kind==='events'?'events':'tasks';const cards=Array.from($(target).querySelectorAll('.item'));const found=cards.find(c=>c.textContent.includes(title));if(!found){alert('저장 확인 완료. 다만 목록 표시가 일치하지 않아. 진단 3이라고 알려줘.')}if(found){found.classList.add('newly-saved');found.scrollIntoView({block:'center',behavior:'smooth'})}}else if(kind==='works')show('work');else show('files');};
+const before=JSON.stringify(state);state[kind].push(item);try{save();const persisted=JSON.parse(localStorage.getItem(key)||'null');if(!persisted||!Array.isArray(persisted[kind])||!persisted[kind].some(x=>String(x.id)===String(item.id)))throw new Error('저장 검증 실패')}catch(err){state=JSON.parse(before);alert('일정을 저장하지 못했어. 다시 시도해 줘.');console.error('Haru save error',err);return}
+window.HaruStore.append('assistant',[item.date,item.time,title,'저장했어.'].filter(Boolean).join(' '));
+pending=null;$('proposal').close();
+// Only announce completion after storage verification. Keep the page where the request began.
+const savedKind={events:'일정',tasks:'할 일',notes:'메모',works:'작업'}[kind];
+const when=[item.date,item.time].filter(Boolean).join(' ');
+const savedReply=[when,title,'저장했어.'].filter(Boolean).join(' ');
+const onHome=document.getElementById('home')?.classList.contains('active');
+if(onHome){const panel=$('haruHomeReply'),label=$('haruHomeReplyText');if(panel&&label){panel.hidden=false;label.textContent=savedReply}}
+else if(document.getElementById('chat')?.classList.contains('active')){chat()}
+else if(kind==='events'||kind==='tasks'){life()}
+else if(kind==='works'){works()}
+else{notes()}
+window.dispatchEvent(new CustomEvent('haru:save-confirmed',{detail:{kind,item,reply:savedReply,home:onHome}}));};
 $('export').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='haru-2.0-backup-'+date()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};show('home')})();
