@@ -228,3 +228,8 @@ nav button span {
 
 /* 3.0-P: compact schedule rows and shared popup */
 .haru-list-row{display:flex!important;flex-direction:column;align-items:flex-start;text-align:left;width:100%;min-height:0!important;padding:13px 16px!important;margin:0 0 8px!important;gap:5px;border-radius:15px;cursor:pointer;font:inherit;color:inherit;background:#fff}.haru-list-row b{font-size:16px;line-height:1.35}.haru-list-row small{font-size:12px;color:#62778c;line-height:1.4}.haru-list-popup-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.haru-list-popup-actions button{flex:1;min-width:90px}.haru-list-popup .haru-popup-heading strong{overflow-wrap:anywhere}
+
+/* 3.0-Q: list popup actions match the blue-gray Haru palette */
+.haru-list-popup .haru-list-popup-actions{display:flex;gap:10px;margin-top:18px}
+.haru-list-popup .haru-list-popup-actions button{flex:1;min-height:44px;border:1px solid #c8d4e2;border-radius:12px;background:#e8eef5;color:#354e68;font-weight:700;font-size:15px;cursor:pointer}
+.haru-list-popup .haru-list-popup-actions button:first-child{background:#566e8b;color:#fff;border-color:#566e8b}
