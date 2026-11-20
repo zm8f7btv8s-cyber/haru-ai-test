@@ -233,3 +233,22 @@ nav button span {
 .haru-list-popup .haru-list-popup-actions{display:flex;gap:10px;margin-top:18px}
 .haru-list-popup .haru-list-popup-actions button{flex:1;min-height:44px;border:1px solid #c8d4e2;border-radius:12px;background:#e8eef5;color:#354e68;font-weight:700;font-size:15px;cursor:pointer}
 .haru-list-popup .haru-list-popup-actions button:first-child{background:#566e8b;color:#fff;border-color:#566e8b}
+
+/* 3.0-T: compact chat — remove the legacy full-width outer conversation cards. */
+#chat .messages{gap:4px;padding:4px 0 8px;min-height:180px}
+#chat .haru-chat-entry,#chat .haru-chat-entry.mine{
+ display:flex;flex-direction:column;width:100%;max-width:100%;min-height:0;
+ margin:0 0 2px;padding:0;border:0;border-radius:0;
+ background:transparent;box-shadow:none;color:inherit;font-size:14px;font-weight:400;
+}
+#chat .haru-chat-entry{align-items:flex-start;text-align:left}
+#chat .haru-chat-entry.mine{align-items:flex-end;text-align:right}
+#chat .haru-chat-entry .bubble{display:block;align-self:auto;width:fit-content;max-width:85%;
+ padding:8px 12px;margin:0;border:0;border-radius:14px;background:#e9eef3;
+ color:#34475a;font-size:14px;font-weight:400;line-height:1.35;text-align:left;
+ white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:none}
+#chat .haru-chat-entry.mine .bubble{background:#536b84;color:#fff}
+#chat .haru-chat-entry .haru-message-time{margin:2px 0 0;padding:0 3px;font-size:10px;line-height:1.1;opacity:.75}
+#chat .haru-chat-day{margin:10px auto 8px}
+#chat .haru-voice-actions{margin-top:5px;gap:5px}
+#chat .haru-voice-actions button{padding:4px 7px;font-size:10px;border-radius:7px}
