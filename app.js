@@ -37,15 +37,32 @@ window.HaruShowAIProposal=function(item){
  if(!item||!['events','tasks','notes','works'].includes(item.kind))throw Error('지원하지 않는 요청 종류');
  pending={...item,original:item.original||''};
  const names={events:'일정',tasks:'할 일',notes:'메모',works:'작업'};
- $('proposalHeading').textContent='AI '+names[item.kind]+' 등록 확인';
- $('proposalInfo').textContent='AI가 분석한 내용이야. 날짜·시간·제목을 확인하고 수정한 뒤 저장해 줘. 확인 전에는 저장되지 않아.';
+ $('proposalHeading').textContent='AI '+names[item.kind]+' '+(item.operation==='update'?'수정 확인':item.operation==='delete'?'삭제 확인':'등록 확인');
+ $('proposalInfo').textContent=item.operation==='delete'?'선택한 기존 일정을 삭제할지 확인해 줘.':item.operation==='update'?'기존 일정의 변경 내용을 확인해 줘. 새 일정은 만들지 않아.':'AI가 분석한 내용이야. 날짜·시간·제목을 확인하고 수정한 뒤 저장해 줘. 확인 전에는 저장되지 않아.';
  const f=$('proposalForm');f.elements.title.value=item.title||'';
  f.elements.date.value=item.date||'';f.elements.time.value=item.time||'';f.elements.place.value=item.place||'';
  const dated=item.kind==='events'||item.kind==='tasks';
  $('proposalDateRow').hidden=!dated;$('proposalTimeRow').hidden=item.kind!=='events';$('proposalPlaceRow').hidden=item.kind!=='events';
  $('proposal').showModal();$('proposalHeading').focus({preventScroll:true});window.HaruProposalCompact?.();
 };
-$('proposalCancel').onclick=()=>{pending=null;$('proposal').close();window.dispatchEvent(new Event('haru:proposal-closed'))};$('proposalForm').onsubmit=e=>{e.preventDefault();if(!pending)return;const f=e.currentTarget,title=f.elements.namedItem('title').value.trim();if(!title){alert('제목을 입력해 줘.');return}const kind=pending.kind;const item={id:uid(),title};if(kind==='events'||kind==='tasks'){item.date=f.elements.namedItem('date').value||date();if(kind==='events'){item.time=f.elements.namedItem('time').value;item.place=f.elements.namedItem('place').value.trim()}else item.done=false}else if(kind==='works')item.done=false;else{item.text=title;item.created=date();delete item.title}
+$('proposalCancel').onclick=()=>{pending=null;$('proposal').close();window.dispatchEvent(new Event('haru:proposal-closed'))};$('proposalForm').onsubmit=e=>{e.preventDefault();if(!pending)return;const f=e.currentTarget,title=f.elements.namedItem('title').value.trim();if(!title){alert('제목을 입력해 줘.');return}const kind=pending.kind;
+if(pending.operation==='update'||pending.operation==='delete'){
+ const operation=pending.operation,targetId=String(pending.targetId);
+ const original=state[kind]?.find(x=>String(x.id)===targetId);
+ if(!original){alert('기존 일정이 없어 변경하지 않았어.');return}
+ const backup=JSON.stringify(state);
+ if(operation==='delete')state[kind]=state[kind].filter(x=>String(x.id)!==targetId);
+ else Object.assign(original,{title,date:f.elements.namedItem('date').value||original.date,time:f.elements.namedItem('time').value,place:f.elements.namedItem('place').value.trim()});
+ try{save();const persisted=JSON.parse(localStorage.getItem(key)||'{}');const found=(persisted[kind]||[]).find(x=>String(x.id)===targetId);
+ if(operation==='delete'?!!found:(!found||found.title!==(operation==='update'?title:original.title)||found.time!==f.elements.namedItem('time').value))throw Error('변경 검증 실패')}
+ catch(err){state=JSON.parse(backup);alert('변경 내용을 저장하지 못했어.');console.error(err);return}
+ const response=operation==='delete'?original.title+' 일정 삭제했어.':[original.date,original.time,original.title,'수정했어.'].filter(Boolean).join(' ');
+ window.HaruStore.append('assistant',response);pending=null;$('proposal').close();
+ if($('home')?.classList.contains('active')){const panel=$('haruHomeReply'),label=$('haruHomeReplyText');if(panel&&label){panel.hidden=false;label.textContent=response}}
+ else if($('chat')?.classList.contains('active'))chat();else life();
+ window.dispatchEvent(new CustomEvent('haru:save-confirmed',{detail:{kind,operation,reply:response}}));return;
+}
+const item={id:uid(),title};if(kind==='events'||kind==='tasks'){item.date=f.elements.namedItem('date').value||date();if(kind==='events'){item.time=f.elements.namedItem('time').value;item.place=f.elements.namedItem('place').value.trim()}else item.done=false}else if(kind==='works')item.done=false;else{item.text=title;item.created=date();delete item.title}
 // Warn on an exact duplicate or overlapping schedule before persisting.
 if(kind==='events'){
  const overlaps=state.events.filter(x=>x.date===item.date&&item.time&&x.time===item.time);
