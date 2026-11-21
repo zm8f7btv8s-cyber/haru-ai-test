@@ -5,7 +5,7 @@ let settings={enabled:true,rate:1};try{settings={...settings,...JSON.parse(local
 toggle.checked=settings.enabled!==false;rate.value=String(settings.rate||1);
 function save(){settings.enabled=toggle.checked;settings.rate=Number(rate.value);try{localStorage.setItem(KEY,JSON.stringify(settings))}catch{}}
 const supported=!!(synth&&window.SpeechSynthesisUtterance);
-let activeRequestId=null,utterance=null,playToken=0,retryTimer=null,watchTimer=null,voiceList=[];
+let activeRequestId=null,utterance=null,playToken=0,retryTimer=null,watchTimer=null,voiceList=[],recognitionFinishing=false;
 function buttons(active){document.querySelectorAll('.haru-stop').forEach(b=>b.disabled=!active)}
 function clearTimers(){clearTimeout(retryTimer);clearInterval(watchTimer);retryTimer=null;watchTimer=null}
 function stop(){playToken++;clearTimers();if(supported)synth.cancel();utterance=null;buttons(false)}
@@ -30,10 +30,10 @@ function speak(text,{automatic=false}={}){
  return true;
 }
 toggle.onchange=()=>{save();if(!toggle.checked)stop()};rate.onchange=save;
-window.addEventListener('haru:question-start',e=>{activeRequestId=e.detail.requestId;stop()});
-window.addEventListener('haru:answer-ready',e=>{const d=e.detail;if(d.requestId===activeRequestId&&d.fromVoice&&settings.enabled)speak(d.text,{automatic:true})});
+window.addEventListener('haru:question-start',e=>{activeRequestId=e.detail.requestId;recognitionFinishing=!!e.detail.fromVoice;stop()});
+window.addEventListener('haru:answer-ready',e=>{const d=e.detail;if(d.requestId!==activeRequestId||!settings.enabled)return;const id=d.requestId;const delay=recognitionFinishing?450:80;recognitionFinishing=false;setTimeout(()=>{if(id===activeRequestId&&!document.hidden)speak(d.text,{automatic:true})},delay)});
 window.addEventListener('haru:answer-error',e=>{if(e.detail.requestId===activeRequestId)stop()});
-window.addEventListener('haru:save-confirmed',e=>{if(settings.enabled&&e.detail.home)speak(e.detail.reply,{automatic:true})});
+window.addEventListener('haru:save-confirmed',e=>{if(settings.enabled)setTimeout(()=>{if(!document.hidden)speak(e.detail.reply,{automatic:true})},180)});
 function decorate(){const bubbles=[...document.querySelectorAll('#messages .bubble:not(.mine):not(.ai-pending)')];for(const b of bubbles){if(b.dataset.haruVoice)return;const text=b.firstChild?.textContent?.trim()||'';if(!text)continue;b.dataset.haruVoice='1';const row=document.createElement('div');row.className='haru-voice-actions';const replay=document.createElement('button');replay.type='button';replay.textContent='🔊 다시 듣기';replay.onclick=()=>speak(text);const halt=document.createElement('button');halt.type='button';halt.className='haru-stop';halt.textContent='■ 중지';halt.disabled=true;halt.onclick=stop;row.append(replay,halt);b.append(row)}}
 const root=$('messages');new MutationObserver(()=>queueMicrotask(decorate)).observe(root,{childList:true,subtree:true});decorate();
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stop()});window.addEventListener('pagehide',stop);

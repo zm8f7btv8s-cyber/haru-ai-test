@@ -38,6 +38,7 @@ window.HaruShowAIProposal=function(item){
  pending={...item,original:item.original||''};
  const names={events:'일정',tasks:'할 일',notes:'메모',works:'작업'};
  $('proposalHeading').textContent='AI '+names[item.kind]+' '+(item.operation==='update'?'수정 확인':item.operation==='delete'?'삭제 확인':'등록 확인');
+ $('proposalForm').querySelector('button[type=submit]').textContent=item.operation==='delete'?'삭제하기':item.operation==='update'?'수정하기':'등록하기';
  $('proposalInfo').textContent=item.operation==='delete'?'선택한 기존 일정을 삭제할지 확인해 줘.':item.operation==='update'?'기존 일정의 변경 내용을 확인해 줘. 새 일정은 만들지 않아.':'AI가 분석한 내용이야. 날짜·시간·제목을 확인하고 수정한 뒤 저장해 줘. 확인 전에는 저장되지 않아.';
  const f=$('proposalForm');f.elements.title.value=item.title||'';
  f.elements.date.value=item.date||'';f.elements.time.value=item.time||'';f.elements.place.value=item.place||'';
@@ -60,7 +61,7 @@ if(pending.operation==='update'||pending.operation==='delete'){
  window.HaruStore.append('assistant',response);pending=null;$('proposal').close();
  if($('home')?.classList.contains('active')){const panel=$('haruHomeReply'),label=$('haruHomeReplyText');if(panel&&label){panel.hidden=false;label.textContent=response}}
  else if($('chat')?.classList.contains('active'))chat();else life();
- window.dispatchEvent(new CustomEvent('haru:save-confirmed',{detail:{kind,operation,reply:response}}));return;
+ window.dispatchEvent(new CustomEvent('haru:save-confirmed',{detail:{kind,operation,reply:response,home:!!$('home')?.classList.contains('active')}}));return;
 }
 const item={id:uid(),title};if(kind==='events'||kind==='tasks'){item.date=f.elements.namedItem('date').value||date();if(kind==='events'){item.time=f.elements.namedItem('time').value;item.place=f.elements.namedItem('place').value.trim()}else item.done=false}else if(kind==='works')item.done=false;else{item.text=title;item.created=date();delete item.title}
 // Warn on an exact duplicate or overlapping schedule before persisting.

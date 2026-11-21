@@ -252,3 +252,12 @@ nav button span {
 #chat .haru-chat-day{margin:10px auto 8px}
 #chat .haru-voice-actions{margin-top:5px;gap:5px}
 #chat .haru-voice-actions button{padding:4px 7px;font-size:10px;border-radius:7px}
+
+/* 3.0-U: even tighter chat; voice controls outside the assistant bubble visually */
+#chat .messages{gap:2px}
+#chat .haru-chat-entry{margin-bottom:0}
+#chat .haru-chat-entry .bubble{padding:7px 10px;line-height:1.3}
+#chat .haru-chat-entry .haru-message-time{margin-top:1px}
+#chat .haru-voice-actions{margin-top:3px;gap:4px}
+#chat .haru-voice-actions button{padding:3px 6px;font-size:10px}
+#chat>.hint:last-of-type{display:none}

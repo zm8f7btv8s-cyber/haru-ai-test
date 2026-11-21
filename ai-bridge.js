@@ -88,12 +88,12 @@ function localScheduleEdit(text){
  const categories=[['골프',/골프|라운딩/],['결혼식',/결혼식/],['친구',/친구/],['회의',/회의/],['점심',/점심/],['저녁',/저녁/],['병원',/병원/],['운동',/운동/]];
  const named=categories.filter(x=>x[1].test(text)).map(x=>x[0]);
  if(!named.length)return null;
- let matches=(s.events||[]).filter(x=>named.some(n=>String(x.title||'').includes(n)||n==='골프'&&/라운딩/.test(x.title||'')));
+ let matches=[...(s.events||[]).map(x=>({...x,_kind:'events'})),...(s.tasks||[]).map(x=>({...x,_kind:'tasks'}))].filter(x=>named.some(n=>String(x.title||'').includes(n)||n==='골프'&&/라운딩/.test(x.title||'')));
  if(day)matches=matches.filter(x=>x.date===day);
  if(m.length>1){let old=Number(m[0][2]);if(m[0][1]==='오후'&&old<12)old+=12;if(m[0][1]==='오전'&&old===12)old=0;const oldTime=String(old).padStart(2,'0')+':'+String(Number(m[0][3]||0)).padStart(2,'0');matches=matches.filter(x=>x.time===oldTime)}
  if(matches.length!==1)return {error:matches.length?'해당하는 일정이 여러 개야. 날짜와 기존 시간을 함께 알려줘.':'변경할 기존 일정을 찾지 못했어. 나의 일정에서 확인해 줘.'};
  const original=matches[0];if(original.time===newTime)return {error:'이미 '+newTime+'으로 등록된 일정이야.'};
- return {target:original,item:{kind:'events',title:original.title,date:original.date,time:newTime,place:original.place||''}};
+ return {target:original,item:{kind:original._kind,title:original.title,date:original.date,time:newTime,place:original.place||''}};
 }
 function localConfirm(text){return /^(응|네|예|그래|좋아|오케이|ok|확인|맞아|진행해|변경해|저장해|해줘)[.!\s]*$/i.test(text)}
 async function handle(form,input){const text=input.value.trim();if(!text)return;const home=form.id==='ask';const fromVoice=!!window.HaruLegacyVoice?.consumeVoiceSubmit?.(home?'home':'chat',text);if(busy){if(!queue.some(x=>x.text===text&&x.form===form))queue.push({form,input,text});input.value='';return}if(text.length>2000){alert('2,000자 이내로 말해 줘.');return}busy=true;input.value='';voiceReset(home);const requestId=String(Date.now())+Math.random();window.dispatchEvent(new CustomEvent('haru:question-start',{detail:{requestId,fromVoice,text}}));log('user',text);if(home)showHome('하루가 생각하고 있어…');else render();
@@ -102,9 +102,9 @@ try{
  if(local){
   if(local.error){answer(local.error,home,fromVoice,requestId);return}
   const {target,item}=local;
-  setPending({operation:'update',targetId:String(target.id),kind:'events',item});
-  window.HaruShowAIProposal({...item,operation:'update',targetId:String(target.id)});
+  setPending({operation:'update',targetId:String(target.id),kind:target._kind,item});
   answer(describe(item)+'으로 기존 일정을 변경할까? 확인 창에서 저장해 줘.',home,fromVoice,requestId);
+  setTimeout(()=>window.HaruShowAIProposal({...item,operation:'update',targetId:String(target.id)}),180);
   return;
  }
  if(pending?.operation&&localConfirm(text)){
@@ -121,12 +121,12 @@ if(action==='update'||action==='delete'){
  else if(action==='update'&&!item)reply='수정할 내용을 확인하지 못했어. 다시 알려줄래?';
  else {setPending({operation:action,targetId:String(target.item.id),kind:target.kind,item:action==='update'?item:null});
  reply=action==='delete'?'기존 '+target.item.title+' 일정을 삭제할까? 확인해 줘.':describe(item)+' 내용으로 기존 일정을 수정할까? 확인해 줘.';
- window.HaruShowAIProposal({...(action==='update'?item:target.item),kind:target.kind,operation:action,targetId:String(target.item.id)});
+ setTimeout(()=>window.HaruShowAIProposal({...(action==='update'?item:target.item),kind:target.kind,operation:action,targetId:String(target.item.id)}),180);
  }
 }
 else if(action==='cancel'&&pending){setPending(null);reply=reply||'알겠어. 변경하지 않을게.'}
 else if(action==='offer'||action==='propose'||action==='revise'){
- if(item&&validItem(item)){setPending(item);if(action==='propose'){window.HaruShowAIProposal(item);reply='등록 내용을 확인해줘. 저장이 끝나면 완료했다고 알려줄게.'}else reply=reply||describe(item)+' 일정으로 등록할까?'}
+ if(item&&validItem(item)){setPending(item);if(action==='propose'){setTimeout(()=>window.HaruShowAIProposal(item),180);reply='등록 내용을 확인해줘. 저장이 끝나면 완료했다고 알려줄게.'}else reply=reply||describe(item)+' 일정으로 등록할까?'}
  else if(action==='revise'&&pending){reply=reply||'수정할 내용을 다시 알려줄래? 기존 일정은 유지하고 있어.'}
  else reply=reply||'등록할 내용을 조금 더 알려줄래?';
 }
