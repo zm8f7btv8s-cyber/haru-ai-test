@@ -4,6 +4,10 @@ const ENDPOINT='https://haru-ai.nsunrang.workers.dev/chat';
 const SESSION_KEY='haru.ai.pending.v3r';
 let busy=false;const queue=[];
 let pending=null;
+let recentTarget=null;
+function rememberTarget(item){if(item?.id)recentTarget={id:String(item.id),at:Date.now()}}
+function recentMatch(day){if(!recentTarget||Date.now()-recentTarget.at>15*60*1000)return null;const found=findTarget(recentTarget.id);return found&&(!day||found.item.date===day)?found:null}
+
 try{const x=JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');if(x&&Date.now()-x.at<3600000)pending=x.value}catch{}
 function setPending(value){pending=value;try{if(value)sessionStorage.setItem(SESSION_KEY,JSON.stringify({value,at:Date.now()}));else sessionStorage.removeItem(SESSION_KEY)}catch{}}
 function snapshot(){return window.HaruStore.read()||{}}
@@ -88,7 +92,7 @@ function describe(item){return [item.date,item.time,item.title,item.place&&('장
 function scheduleItems(){const s=snapshot();return [...(s.events||[]).map(item=>({item,kind:'events'})),...(s.tasks||[]).map(item=>({item,kind:'tasks'}))]}
 function normalized(v){return String(v||'').toLowerCase().replace(/\s+/g,'').replace(/[^\p{L}\p{N}]/gu,'')}
 function mentionedDay(text){const d=new Date();d.setHours(12,0,0,0);if(/모레/.test(text))d.setDate(d.getDate()+2);else if(/내일/.test(text))d.setDate(d.getDate()+1);else if(/오늘/.test(text)){}else{const full=text.match(/(20\d\d)[-.년\s]+(\d{1,2})[-.월\s]+(\d{1,2})/);if(full)return [full[1],full[2].padStart(2,'0'),full[3].padStart(2,'0')].join('-');return null}return todayOf(d)}
-function parseTime(text){const m=[...text.matchAll(/(?:(오전|오후|아침|저녁|밤|낮)\s*)?(\d{1,2})\s*(?:시|:)(?:\s*(\d{1,2})\s*분?)?/g)];return m.map(x=>{let h=+x[2],minute=+(x[3]||0);if(h>23||minute>59)return null;if(['오후','저녁','밤'].includes(x[1])&&h<12)h+=12;if(['오전','아침'].includes(x[1])&&h===12)h=0;return String(h).padStart(2,'0')+':'+String(minute).padStart(2,'0')}).filter(Boolean)}
+function parseTime(text){const globalEvening=/(?:저녁|오후|밤)\s*(?:\d{1,2}\s*(?:시|:)|일곱\s*시)/.test(text);const m=[...text.matchAll(/(?:(오전|오후|아침|저녁|밤|낮)\s*)?(\d{1,2})\s*(?:시|:)(?:\s*(\d{1,2})\s*분?)?/g)];return m.map(x=>{let h=+x[2],minute=+(x[3]||0);if(h>23||minute>59)return null;if((['오후','저녁','밤'].includes(x[1])||(!x[1]&&globalEvening&&m.length===1))&&h<12)h+=12;if(['오전','아침'].includes(x[1])&&h===12)h=0;return String(h).padStart(2,'0')+':'+String(minute).padStart(2,'0')}).filter(Boolean)}
 function targetMatches(text,{day=null,oldTime=null}={}){
  const entries=scheduleItems(),query=normalized(text.replace(/(?:오전|오후|아침|저녁|밤|낮)?\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?/g,' ').replace(/(?:내일|오늘|모레|일정|시간|변경|바꿔|바꿔줘|수정|옮겨|해줘|해주세요|등록|취소|삭제|몇|언제|시각|열두|열한|오케이|응|기존)/g,' '));
  const words=normalized(text).match(/[가-힣a-z]+/g)||[];
@@ -106,12 +110,13 @@ function localScheduleEdit(text){
  const times=parseTime(text);if(!times.length)return null;
  const newTime=times[times.length-1],day=mentionedDay(text),oldTime=times.length>1?times[0]:null;
  let matches=targetMatches(text,{day,oldTime});
- if(!matches.length&&pending?.lastTargetId){const found=findTarget(pending.lastTargetId);if(found&&(!day||found.item.date===day))matches=[{item:found.item,kind:found.kind}]}
+ if(!matches.length){const found=recentMatch(day);if(found)matches=[{item:found.item,kind:found.kind}]}
+ if(!matches.length&&day){const byDay=scheduleItems().filter(x=>x.item.date===day);if(byDay.length===1)matches=byDay}
  if(matches.length!==1)return {error:matches.length?'같은 조건의 일정이 여러 개야. 날짜나 제목을 더 알려줘.':'변경할 기존 일정을 찾지 못했어. 일정 제목과 날짜를 알려줘.'};
- const {item:original,kind}=matches[0];if(original.time===newTime)return {error:'이미 '+newTime+'으로 등록된 일정이야.'};
+ const {item:original,kind}=matches[0];rememberTarget(original);if(original.time===newTime)return {error:'이미 '+newTime+'으로 등록된 일정이야.'};
  return {target:{...original,_kind:kind},item:{kind,title:original.title,date:original.date,time:newTime,place:original.place||''}};
 }
-function resolveTarget(result,text){let target=findTarget(result.targetId);if(target)return target;const day=mentionedDay(text);const matches=targetMatches(text,{day});if(matches.length===1)return {kind:matches[0].kind,item:matches[0].item};return null}
+function resolveTarget(result,text){let target=findTarget(result.targetId);if(target){rememberTarget(target.item);return target;}const recent=recentMatch(mentionedDay(text));if(recent&&/(시간|바꿔|변경|수정|취소|삭제)/.test(text))return recent;const day=mentionedDay(text);const matches=targetMatches(text,{day});if(matches.length===1){rememberTarget(matches[0].item);return {kind:matches[0].kind,item:matches[0].item}}return null}
 
 function scheduleTitle(text){
  let t=String(text||'').replace(/(?:오늘|내일|모레|이번\s*주|다음\s*주)/g,' ')
@@ -134,8 +139,8 @@ function localRegistration(text){
  if(!day||!times.length||!title)return null;
  const item={kind:'events',title,date:day,time:times[times.length-1],place:''};
  const duplicates=duplicateMatches(item);
- if(duplicates.exact.length)return {error:describe(duplicates.exact[0].item)+' 일정이 이미 등록되어 있어. 중복 등록은 하지 않았어.'};
- if(duplicates.same.length)return {error:describe(duplicates.same[0].item)+' 일정이 이미 있어. 시간을 변경할까, 별도로 등록할까?'};
+ if(duplicates.exact.length)return {existing:duplicates.exact[0].item,error:describe(duplicates.exact[0].item)+' 일정이 이미 등록되어 있어. 중복 등록은 하지 않았어.'};
+ if(duplicates.same.length)return {existing:duplicates.same[0].item,error:describe(duplicates.same[0].item)+' 일정이 이미 있어. 시간을 변경할까, 별도로 등록할까?'};
  return {item,conflict:duplicates.conflict.length>0};
 }
 function localAgenda(text){
@@ -149,13 +154,13 @@ async function handle(form,input){const text=input.value.trim();if(!text)return;
 try{
  const registration=localRegistration(text);
  if(registration){
-  if(registration.error){answer(registration.error,home,fromVoice,requestId);return}
+  if(registration.error){if(registration.existing)rememberTarget(registration.existing);answer(registration.error,home,fromVoice,requestId);return}
   const item=registration.item;setPending({operation:'create',item});
   answer(describe(item)+(registration.conflict?' · 같은 시간에 다른 일정이 있어.':'')+' 등록할까? 확인 창에서 저장해 줘.',home,fromVoice,requestId);
   setTimeout(()=>window.HaruShowAIProposal(item),180);return;
  }
  const agendaReply=localAgenda(text);
- if(agendaReply){answer(agendaReply,home,fromVoice,requestId);return}
+ if(agendaReply){const day=mentionedDay(text),matches=scheduleItems().filter(x=>x.item.date===day);if(matches.length===1)rememberTarget(matches[0].item);answer(agendaReply,home,fromVoice,requestId);return}
  const local=localScheduleEdit(text);
  if(local){
   if(local.error){answer(local.error,home,fromVoice,requestId);return}
@@ -205,7 +210,7 @@ $('ask').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening(
 $('chatForm').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('chatForm'),$('chatText'))};
 $('aiTest').onclick=async()=>{const b=$('aiTest'),s=$('aiTestStatus');b.disabled=true;s.textContent='AI 연결 확인 중…';try{s.textContent='연결 성공 · '+(await requestAI('한국어로 짧게 인사해 줘.')).slice(0,140)}catch(e){s.textContent='연결 실패 · '+e.message}finally{b.disabled=false}};
 window.addEventListener('haru:proposal-closed',()=>setPending(null));
-window.addEventListener('haru:save-confirmed',()=>setPending(null));
-window.HaruAITest={normalizeItem,mergeItem,validItem,jsonReply,localScheduleEdit,targetMatches,parseTime,resolveTarget};
+window.addEventListener('haru:save-confirmed',e=>{setPending(null);if(e.detail?.item?.id)rememberTarget(e.detail.item);else if(e.detail?.targetId){const t=findTarget(e.detail.targetId);if(t)rememberTarget(t.item)}});
+window.HaruAITest={normalizeItem,mergeItem,validItem,jsonReply,localScheduleEdit,targetMatches,parseTime,resolveTarget,rememberTarget,recentMatch};
 })();
 (()=>{const $=id=>document.getElementById(id),f=$('proposalForm'),fields=$('proposalFields'),summary=$('proposalSummary'),edit=$('proposalEdit');const refresh=()=>{summary.replaceChildren();const title=document.createElement('strong');title.textContent=f.elements.title.value||'제목 확인 필요';summary.append(title);const detail=document.createElement('div');detail.textContent=[f.elements.date.value,f.elements.time.value,f.elements.place.value].filter(Boolean).join(' · ')||'날짜·시간 미지정';summary.append(detail)};window.HaruProposalCompact=()=>{fields.hidden=true;edit.textContent='✎ 내용 수정';refresh()};edit.addEventListener('click',()=>{fields.hidden=!fields.hidden;edit.textContent=fields.hidden?'✎ 내용 수정':'수정 접기';if(!fields.hidden)f.elements.title.focus()});for(const n of ['title','date','time','place'])f.elements[n].addEventListener('input',refresh)})();

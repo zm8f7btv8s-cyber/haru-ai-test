@@ -81,7 +81,7 @@ if(pending.operation==='update'||pending.operation==='delete'){
  window.HaruStore.append('assistant',response);pending=null;$('proposal').close();
  if($('home')?.classList.contains('active')){const panel=$('haruHomeReply'),label=$('haruHomeReplyText');if(panel&&label){panel.hidden=false;label.textContent=response}}
  else if($('chat')?.classList.contains('active'))chat();else life();
- window.dispatchEvent(new CustomEvent('haru:save-confirmed',{detail:{kind,operation,reply:response,home:!!$('home')?.classList.contains('active')}}));return;
+ window.dispatchEvent(new CustomEvent('haru:save-confirmed',{detail:{kind,operation,targetId,reply:response,home:!!$('home')?.classList.contains('active')}}));return;
 }
 const item={id:uid(),title};if(kind==='events'||kind==='tasks'){item.date=f.elements.namedItem('date').value||date();if(kind==='events'){item.time=f.elements.namedItem('time').value;item.place=f.elements.namedItem('place').value.trim()}else item.done=false}else if(kind==='works')item.done=false;else{item.text=title;item.created=date();delete item.title}
 // Confirm same-title different-time registration to avoid accidental duplicates.
