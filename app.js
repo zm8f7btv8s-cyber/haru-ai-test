@@ -31,8 +31,28 @@ function openEditor(kind,item=null){editKind=kind;editingId=item?.id??null;$('en
 $('newEvent').onclick=()=>openEditor('events');$('newTask').onclick=()=>openEditor('tasks');$('cancel').onclick=()=>$('editor').close();
 $('entryForm').onsubmit=e=>{e.preventDefault();const f=e.target;const title=f.elements.title.value.trim();if(!title)return;const old=editingId!=null?state[editKind].find(x=>String(x.id)===String(editingId)):null;const x={...(old||{}),id:old?.id||uid(),title,date:f.elements.date.value};if(editKind==='events'){x.time=f.elements.time.value;x.place=f.elements.place.value.trim()}else x.done=old?.done||false;if(old)Object.assign(old,x);else state[editKind].push(x);try{save()}catch(err){alert('저장하지 못했어. 저장 공간을 확인해 줘.');return}$('editor').close();life()};
 function openListPopup(kind,x){let dlg=$('haruListPopup');if(!dlg){dlg=document.createElement('dialog');dlg.id='haruListPopup';dlg.className='haru-day-popup haru-list-popup';document.body.append(dlg)}dlg.replaceChildren();const head=el('div','','haru-popup-heading');const title=el('strong','');title.textContent=x.title;const close=el('button','×');close.type='button';close.setAttribute('aria-label','닫기');close.onclick=()=>dlg.close();head.append(title,close);dlg.append(head);const info=el('div','','haru-popup-items');const detail=el('div','','haru-popup-item');const dt=el('small','');dt.textContent=[fmt(x.date),x.time,x.place].filter(Boolean).join(' · ')||'날짜 미정';detail.append(dt);info.append(detail);dlg.append(info);const actions=el('div','','haru-list-popup-actions');const edit=el('button','수정하기');edit.onclick=()=>{dlg.close();openEditor(kind,x)};actions.append(edit);if(kind==='tasks'){const done=el('button',x.done?'완료 취소':'완료');done.onclick=()=>{x.done=!x.done;save();life();dlg.close()};actions.append(done)}const del=el('button','삭제하기');del.onclick=()=>{if(confirm('이 항목을 삭제할까?')){state[kind]=state[kind].filter(y=>String(y.id)!==String(x.id));save();life();dlg.close()}};actions.append(del);dlg.append(actions);dlg.onclick=e=>{if(e.target===dlg)dlg.close()};dlg.showModal()}
-function addItems(target,items,kind){clear(target);if(!items.length){$(target).append(el('p','아직 등록된 항목이 없어.','hint'));return}for(const x of items.slice().sort((a,b)=>{const day=(a.date||'').localeCompare(b.date||'');if(day)return day;if(kind!=='events')return 0;return (a.time||'99:99').localeCompare(b.time||'99:99')})){const card=el('button','','item haru-compact-item haru-list-row');card.type='button';const title=el('b','');title.textContent=x.title;const meta=el('small','');meta.textContent=[fmt(x.date),x.time,x.place].filter(Boolean).join(' · ');card.append(title,meta);card.onclick=()=>openListPopup(kind,x);$(target).append(card)}}
-function life(){addItems('events',all('events'),'events');addItems('tasks',all('tasks'),'tasks')}function brief(){const todays=all('events').filter(x=>x.date===date()),tasks=all('tasks').filter(x=>x.date===date()&&!x.done);$('briefContent').replaceChildren(el('div',`<h3>오늘의 일정 · ${todays.length}건</h3>${todays.map(x=>`<p>${safe(x.time||'')} ${safe(x.title)}</p>`).join('')||'<p>오늘 일정이 없어.</p>'}<h3>오늘의 할 일 · ${tasks.length}건</h3>${tasks.map(x=>`<p>${safe(x.title)}</p>`).join('')||'<p>오늘 할 일이 없어.</p>'}`,'item'))}function works(){clear('works');for(const x of state.works){const c=el('div',`<b class="${x.done?'done':''}">${safe(x.title)}</b>`,'item');const b=el('button',x.done?'다시 진행':'완료');b.onclick=()=>{x.done=!x.done;save();works()};const d=el('button','삭제');d.onclick=()=>{state.works=state.works.filter(y=>y.id!==x.id);save();works()};c.append(b,d);$('works').append(c)}}$('workForm').onsubmit=e=>{e.preventDefault();const f=e.target;const title=f.querySelector('input').value.trim();if(!title)return;state.works.push({id:uid(),title,done:false});save();f.reset();works()};function notes(){clear('notes');for(const x of state.notes.slice().reverse()){const c=el('div',`<small>${safe(x.created)}</small><p>${safe(x.text).replace(/\n/g,'<br>')}</p>`,'item');const d=el('button','삭제');d.onclick=()=>{state.notes=state.notes.filter(y=>y.id!==x.id);save();notes()};c.append(d);$('notes').append(c)}}$('noteForm').onsubmit=e=>{e.preventDefault();const f=e.target,text=f.querySelector('textarea').value.trim();if(!text)return;state.notes.push({id:uid(),text,created:date()});save();f.reset();notes()};function chat(){try{const latest=JSON.parse(localStorage.getItem(key)||'null');if(Array.isArray(latest?.messages))state.messages=latest.messages}catch{}window.HaruRenderConversation(state.messages,$('messages'));if(!state.messages.length)$('messages').append(el('div','하루에게 편하게 말해 줘.','bubble'))}let pending=null;
+function addItems(target,items,kind){
+ clear(target);const host=$(target);if(!items.length){host.append(el('p','등록된 항목이 없어.','hint'));return}
+ const now=date(),future=items.filter(x=>!x.date||x.date>=now),past=items.filter(x=>x.date&&x.date<now);
+ const section=(label,records,isPast)=>{
+  if(!records.length)return;
+  const h=el('h3','',isPast?'haru-past-title':'haru-future-title');h.textContent=label;host.append(h);
+  const sorted=records.slice().sort((a,b)=>{const da=(a.date||'9999').localeCompare(b.date||'9999');return (isPast?-da:da)||(a.time||'99:99').localeCompare(b.time||'99:99')});
+  let previous=null;
+  for(const x of sorted){
+   const group=x.date||'날짜 미정';
+   if(group!==previous){const d=el('div','','haru-date-heading');d.textContent=group===now?'오늘 · '+group:group;host.append(d);previous=group}
+   const card=el('button','','item haru-compact-item haru-list-row');card.type='button';
+   const title=el('b','');title.textContent=x.title;const meta=el('small','');
+   meta.textContent=[x.time,x.place].filter(Boolean).join(' · ')||'시간 미정';
+   card.append(title,meta);card.onclick=()=>openListPopup(kind,x);host.append(card)
+  }
+ };
+ section('예정된 '+(kind==='events'?'일정':'할 일'),future,false);
+ section('지난 '+(kind==='events'?'일정':'할 일'),past,true);
+}
+function life(){addItems('events',all('events'),'events');addItems('tasks',all('tasks'),'tasks')}
+function brief(){const todays=all('events').filter(x=>x.date===date()),tasks=all('tasks').filter(x=>x.date===date()&&!x.done);$('briefContent').replaceChildren(el('div',`<h3>오늘의 일정 · ${todays.length}건</h3>${todays.map(x=>`<p>${safe(x.time||'')} ${safe(x.title)}</p>`).join('')||'<p>오늘 일정이 없어.</p>'}<h3>오늘의 할 일 · ${tasks.length}건</h3>${tasks.map(x=>`<p>${safe(x.title)}</p>`).join('')||'<p>오늘 할 일이 없어.</p>'}`,'item'))}function works(){clear('works');for(const x of state.works){const c=el('div',`<b class="${x.done?'done':''}">${safe(x.title)}</b>`,'item');const b=el('button',x.done?'다시 진행':'완료');b.onclick=()=>{x.done=!x.done;save();works()};const d=el('button','삭제');d.onclick=()=>{state.works=state.works.filter(y=>y.id!==x.id);save();works()};c.append(b,d);$('works').append(c)}}$('workForm').onsubmit=e=>{e.preventDefault();const f=e.target;const title=f.querySelector('input').value.trim();if(!title)return;state.works.push({id:uid(),title,done:false});save();f.reset();works()};function notes(){clear('notes');for(const x of state.notes.slice().reverse()){const c=el('div',`<small>${safe(x.created)}</small><p>${safe(x.text).replace(/\n/g,'<br>')}</p>`,'item');const d=el('button','삭제');d.onclick=()=>{state.notes=state.notes.filter(y=>y.id!==x.id);save();notes()};c.append(d);$('notes').append(c)}}$('noteForm').onsubmit=e=>{e.preventDefault();const f=e.target,text=f.querySelector('textarea').value.trim();if(!text)return;state.notes.push({id:uid(),text,created:date()});save();f.reset();notes()};function chat(){try{const latest=JSON.parse(localStorage.getItem(key)||'null');if(Array.isArray(latest?.messages))state.messages=latest.messages}catch{}window.HaruRenderConversation(state.messages,$('messages'));if(!state.messages.length)$('messages').append(el('div','하루에게 편하게 말해 줘.','bubble'))}let pending=null;
 window.HaruShowAIProposal=function(item){
  if(!item||!['events','tasks','notes','works'].includes(item.kind))throw Error('지원하지 않는 요청 종류');
  pending={...item,original:item.original||''};
@@ -64,12 +84,18 @@ if(pending.operation==='update'||pending.operation==='delete'){
  window.dispatchEvent(new CustomEvent('haru:save-confirmed',{detail:{kind,operation,reply:response,home:!!$('home')?.classList.contains('active')}}));return;
 }
 const item={id:uid(),title};if(kind==='events'||kind==='tasks'){item.date=f.elements.namedItem('date').value||date();if(kind==='events'){item.time=f.elements.namedItem('time').value;item.place=f.elements.namedItem('place').value.trim()}else item.done=false}else if(kind==='works')item.done=false;else{item.text=title;item.created=date();delete item.title}
+// Confirm same-title different-time registration to avoid accidental duplicates.
+if(kind==='events'){
+ const sameTitle=state.events.filter(x=>x.date===item.date&&x.title.trim().replace(/\s+/g,'')===title.replace(/\s+/g,'')&&x.time!==item.time);
+ if(sameTitle.length&&!confirm('같은 날짜에 '+title+' 일정이 다른 시간으로 등록되어 있어. 기존 일정을 수정하는 대신 별도로 추가할까?'))return;
+}
 // Warn on an exact duplicate or overlapping schedule before persisting.
 if(kind==='events'){
  const overlaps=state.events.filter(x=>x.date===item.date&&item.time&&x.time===item.time);
  if(overlaps.length){
-  const exact=overlaps.some(x=>x.title.trim()===title);
-  if(!confirm(exact?'같은 날짜·시간·제목의 일정이 이미 있어. 그래도 등록할까?':'같은 시간에 '+overlaps.map(x=>x.title).slice(0,2).join(', ')+' 일정이 있어. 그래도 등록할까?'))return;
+  const exact=overlaps.some(x=>x.title.trim().replace(/\s+/g,'')===title.replace(/\s+/g,''));
+  if(exact){alert('동일한 일정이 이미 등록되어 있어. 중복 등록하지 않았어.');return}
+  if(!confirm('같은 시간에 '+overlaps.map(x=>x.title).slice(0,2).join(', ')+' 일정이 있어. 별도 일정으로 등록할까?'))return;
  }
 }
 // Commit the record and confirmation together; do not report success until persistence is verified.

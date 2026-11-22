@@ -261,3 +261,9 @@ nav button span {
 #chat .haru-voice-actions{margin-top:3px;gap:4px}
 #chat .haru-voice-actions button{padding:3px 6px;font-size:10px}
 #chat>.hint:last-of-type{display:none}
+
+/* 3.0-W grouped schedule list */
+.haru-date-heading{font-size:14px;font-weight:750;color:#526a84;margin:13px 4px 7px}
+.haru-past-title{margin:25px 0 9px;border-top:1px solid #dce3eb;padding-top:20px;color:#718298}
+.haru-future-title{margin:18px 0 10px}
+#events .haru-list-row,#tasks .haru-list-row{margin:5px 0 7px}
