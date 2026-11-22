@@ -53,6 +53,7 @@ async function decide(text){
  const history=(store.messages||[]).filter(x=>!x.aiError).slice(-5,-1).map(x=>({role:x.who,text:String(x.text||'').slice(0,200)}));
  const agenda={events:(store.events||[]).slice(-100).map(x=>({id:String(x.id),title:x.title,date:x.date,time:x.time,place:x.place})),tasks:(store.tasks||[]).slice(-100).map(x=>({id:String(x.id),title:x.title,date:x.date,done:x.done}))};
  const prompt=`하루 AI 개인비서. 사용자의 의도를 문맥으로 판단하고 JSON 객체 하나만 출력. 오늘 ${today()}, 현재 한국시간 ${new Date().toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})}.
+반드시 친근하고 차분한 한국어 반말만 사용해. 존댓말(-요, -습니다, -세요, -까요)은 쓰지 마. 답변은 짧고 구어체로 쓰고, 날짜와 시각은 읽기 쉬운 말로 표현해. 불확실한 사람 이름·장소·모임명은 추측해 바꾸지 말고 확인 질문을 해. 사용자가 직접 수정한 고유명사는 그대로 유지해.
 행동 action: chat,offer,propose,confirm,revise,cancel,agenda,weather,update,delete.
 기존 일정의 제목이 띄어쓰기나 표현이 달라도 저장된 항목을 찾아야 한다. 현재 일정의 고유 ID를 그대로 써야 한다. 기존 일정 변경은 반드시 update, 취소/삭제는 delete. 기존 일정을 변경하면서 propose를 사용하지 말 것. 저장되지 않은 등록 제안 수정은 revise. 기존 항목 수정/삭제 시 반드시 아래 목록의 실제 id를 targetId로 지정. 동일 제목 일정이 복수이고 대상을 확정 못하면 chat으로 명확히 질문. 수정·삭제할 기존 항목이 없을 때만 chat으로 알려줄 것. 새 등록은 기존 항목이 없어도 propose로 진행하며 중복 검사를 먼저 할 것. 단순 사실 진술은 offer, 명시적 새 등록은 propose. 직전 제안에 동의하면 confirm. 날씨 실시간 데이터는 없으니 만들지 말 것. 완료됐다고 주장하지 말 것.
 JSON: {"action":"chat|offer|propose|confirm|revise|cancel|agenda|weather|update|delete","reply":"짧은 한국어 답변","targetId":"기존 항목의 정확한 id 또는 빈 문자열","item":null 또는 {"kind":"events|tasks|notes|works","title":"제목","date":"YYYY-MM-DD 또는 빈 문자열","time":"HH:MM 또는 빈 문자열","place":"장소 또는 빈 문자열"}}.
@@ -70,7 +71,17 @@ update: item에는 변경할 필드만 넣어도 됨. 다른 필드는 원본 �
 }
 function showHome(reply){const panel=$('haruHomeReply');if(!panel)return;panel.hidden=false;$('haruHomeReplyText').textContent=reply;panel.scrollIntoView({block:'nearest',behavior:'smooth'})}
 function render(){window.HaruRenderConversation(snapshot().messages||[],$('messages'))}
-function answer(reply,home,fromVoice,requestId,aiError=false){log('assistant',reply,aiError?{aiError:true}:undefined);if(home)showHome(reply);else render();window.dispatchEvent(new CustomEvent('haru:answer-ready',{detail:{requestId,fromVoice,text:reply}}))}
+function casualReply(text){
+ return String(text||'').replace(/등록하시겠어요\?/g,'등록할까?').replace(/등록할까요\?/g,'등록할까?')
+ .replace(/변경할까요\?/g,'변경할까?').replace(/확인해 주세요/g,'확인해 줘')
+ .replace(/알려주세요/g,'알려줘').replace(/등록되어 있습니다/g,'등록되어 있어')
+ .replace(/등록되어 있지 않습니다/g,'등록되어 있지 않아')
+ .replace(/저장되었습니다/g,'저장했어').replace(/완료되었습니다/g,'완료했어')
+ .replace(/없습니다/g,'없어').replace(/입니다(?=[.!?]|$)/g,'이야')
+ .replace(/있어요(?=[.!?]|$)/g,'있어').replace(/없어요(?=[.!?]|$)/g,'없어')
+ .replace(/할까요\?/g,'할까?');
+}
+function answer(reply,home,fromVoice,requestId,aiError=false){reply=casualReply(reply);log('assistant',reply,aiError?{aiError:true}:undefined);if(home)showHome(reply);else render();window.dispatchEvent(new CustomEvent('haru:answer-ready',{detail:{requestId,fromVoice,text:reply}}))}
 function voiceReset(home){if(home)window.HaruLegacyVoice?.reset()}
 function describe(item){return [item.date,item.time,item.title,item.place&&('장소 '+item.place)].filter(Boolean).join(' · ')}
 // Local, deterministic schedule edit path: no AI call is needed for a clearly specified change.

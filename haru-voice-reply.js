@@ -11,13 +11,34 @@ function clearTimers(){clearTimeout(retryTimer);clearInterval(watchTimer);retryT
 function stop(){playToken++;clearTimers();if(supported)synth.cancel();utterance=null;buttons(false)}
 function clean(t){return String(t||'').replace(/(20\d\d)-(\d\d)-(\d\d)/g,(_,y,m,d)=>`${Number(m)}월 ${Number(d)}일`).replace(/([01]\d|2[0-3]):([0-5]\d)/g,(_,h,m)=>`${Number(h)}시 ${Number(m)?Number(m)+'분':''}`).replace(/[•·]/g,' ').replace(/\s+/g,' ').trim().slice(0,1500)}
 function voices(){const current=synth.getVoices()||[];if(current.length)voiceList=current;return voiceList}
+function chooseVoice(){
+ const korean=voices().filter(v=>/^ko(?:-|$)/i.test(v.lang||''));
+ if(!korean.length)return null;
+ // Prefer high-quality on-device Korean voices when the browser exposes them.
+ const score=v=>{const name=(v.name||'').toLowerCase();let n=0;
+  if(/premium|enhanced|고품질|siri|natural|neural/.test(name))n+=15;
+  if(/compact|저품질/.test(name))n-=10;
+  if(v.localService)n+=2;
+  if(/^ko-kr$/i.test(v.lang))n+=3;
+  return n;
+ };
+ return korean.slice().sort((a,b)=>score(b)-score(a))[0];
+}
+function naturalSpeech(text){
+ let t=clean(text);
+ // Spoken Korean is more natural with short pauses and conversational endings.
+ t=t.replace(/\s*[·•]\s*/g,', ').replace(/\s*\/\s*/g,', ');
+ t=t.replace(/(\d{1,2})시\s+0분/g,'$1시');
+ t=t.replace(/([.!?])(?=\S)/g,'$1 ');
+ return t;
+}
 if(supported){voices();if(synth.addEventListener)synth.addEventListener('voiceschanged',voices)}
 function speak(text,{automatic=false}={}){
  if(!supported)return false;
- const content=clean(text);if(!content)return false;
+ const content=naturalSpeech(text);if(!content)return false;
  stop();const token=playToken;
- const u=new SpeechSynthesisUtterance(content);utterance=u;u.lang='ko-KR';u.rate=settings.rate;
- const list=voices();u.voice=list.find(v=>v.lang?.toLowerCase()==='ko-kr')||list.find(v=>v.lang?.toLowerCase().startsWith('ko'))||null;
+ const u=new SpeechSynthesisUtterance(content);utterance=u;u.lang='ko-KR';u.rate=Math.max(.75,Math.min(1.15,settings.rate*.94));u.pitch=1.04;u.volume=1;
+ u.voice=chooseVoice();
  let started=false,finished=false;
  function finish(){if(finished||token!==playToken)return;finished=true;clearTimers();if(utterance===u)utterance=null;buttons(false)}
  u.onstart=()=>{if(token!==playToken)return;started=true;clearTimeout(retryTimer);buttons(true)};

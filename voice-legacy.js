@@ -15,7 +15,7 @@ function ui(message=''){
  chatMic.setAttribute('aria-pressed',String(chat));chatMic.setAttribute('aria-label',chat?'음성 입력 취소':'음성으로 질문하기');
  chatMic.innerHTML=chat?'<span aria-hidden="true" style="font-size:22px;line-height:1">✕</span>':MIC_ICON;
  if(chatDone)chatDone.hidden=!chat;
- if(prompt)prompt.textContent=active?'듣고 있어요…':'편하게 말씀해 주세요';
+ if(prompt)prompt.textContent=active?'듣고 있어…':'편하게 말해 줘';
  if(homeStatus)homeStatus.textContent=home?message:(!active&&session?.target==='home'?message:'');
  if(chatStatus)chatStatus.textContent=chat?message:(!active&&session?.target==='chat'?message:'');
 }
@@ -26,7 +26,7 @@ function schedule(s){clearTimer();if(!s.active||!s.heard)return;timer=setTimeout
 function stopRecognizer(s,abort){clearTimer();clearTimeout(s.restart);const r=s.recognition;s.recognition=null;if(!r)return;r.onstart=r.onresult=r.onerror=r.onend=null;try{abort?r.abort():r.stop()}catch{}}
 function begin(target){if(listening())return;const field=$(target==='chat'?'chatText':'askText');const current=field.value.trim();const base=lastVoice&&current===lastCombined?current.slice(0,current.length-lastVoice.length).trim():current;const s={target,field,base,final:'',cycleFinal:'',interim:'',active:true,heard:false,recognition:null,restart:null,failures:0,error:''};session=s;
  if(!SR){s.active=false;ui('이 브라우저는 음성 인식을 지원하지 않아요. 키보드 마이크를 이용해 주세요.');return}
- tone('start');ui('음성 인식 중 · 2초간 말이 없으면 종료해요');cycle(s)}
+ tone('start');ui('음성 인식 중 · 2초간 말이 없으면 종료해');cycle(s)}
 function cycle(s){if(session!==s||!s.active)return;const r=new SR();s.recognition=r;s.error='';s.cycleFinal='';s.interim='';r.lang='ko-KR';r.interimResults=true;r.continuous=true;
  r.onresult=e=>{if(session!==s||s.recognition!==r||!s.active)return;let f='',i='';for(let n=0;n<e.results.length;n++){const v=e.results[n][0]?.transcript||'';if(e.results[n].isFinal)f+=v+' ';else i+=v+' '}s.cycleFinal=f.trim();s.interim=i.trim();if(f||i){s.heard=true;compose(s);schedule(s)}};
  r.onerror=e=>{s.error=e.error||'unknown'};
@@ -35,7 +35,7 @@ function cycle(s){if(session!==s||!s.active)return;const r=new SR();s.recognitio
  if(s.failures++<2){s.restart=setTimeout(()=>cycle(s),350)}else{s.active=false;clearTimer();tone('end');ui('음성 인식이 종료됐어요. 다시 말하려면 마이크를 눌러 주세요.')}};
  try{r.start()}catch{s.active=false;clearTimer();ui('마이크를 시작하지 못했어요. 다시 눌러 주세요.')}}
 function finish(){const s=session;if(!listening())return;clearTimer();s.active=false;clearTimeout(s.restart);tone('end');const r=s.recognition;
- const done=()=>{if(session!==s||s.finished)return;s.finished=true;{const fragment=s.cycleFinal||s.interim;if(fragment&&!(s.final===fragment||s.final.endsWith(' '+fragment)))s.final=[s.final,fragment].filter(Boolean).join(' ').trim();}s.cycleFinal='';s.interim='';compose(s);s.recognition=null;ui('인식 완료 · 하루에게 질문을 보내고 있어요…');if(s.field.value.trim()){voiceSubmit={target:s.target,text:s.field.value.trim(),at:Date.now()};const form=$(s.target==='chat'?'chatForm':'ask');if(form?.requestSubmit)form.requestSubmit();else form?.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));}else ui('인식된 내용이 없어요. 다시 말씀해 주세요.')};
+ const done=()=>{if(session!==s||s.finished)return;s.finished=true;{const fragment=s.cycleFinal||s.interim;if(fragment&&!(s.final===fragment||s.final.endsWith(' '+fragment)))s.final=[s.final,fragment].filter(Boolean).join(' ').trim();}s.cycleFinal='';s.interim='';compose(s);s.recognition=null;ui('인식 완료 · 하루에게 질문을 보내고 있어…');if(s.field.value.trim()){voiceSubmit={target:s.target,text:s.field.value.trim(),at:Date.now()};const form=$(s.target==='chat'?'chatForm':'ask');if(form?.requestSubmit)form.requestSubmit();else form?.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));}else ui('인식된 내용이 없어요. 다시 말씀해 주세요.')};
  if(r){r.onresult=e=>{let f='',i='';for(let n=0;n<e.results.length;n++){const v=e.results[n][0]?.transcript||'';if(e.results[n].isFinal)f+=v+' ';else i+=v+' '}s.cycleFinal=f.trim();s.interim=i.trim();compose(s)};r.onend=done;try{r.stop()}catch{stopRecognizer(s,true);done()};ui('음성 인식을 마무리하고 있어요…')}else done();}
 function cancel(){const s=session;if(!listening())return;stopRecognizer(s,true);s.active=false;session=null;s.field.value=s.base;lastVoice='';lastCombined='';s.field.dispatchEvent(new Event('input',{bubbles:true}));tone('end');ui('음성 입력을 취소했어요.');(s.target==='chat'?chatStatus:homeStatus).textContent='음성 입력을 취소했어요.';s.field.focus()}
 homeMic.addEventListener('click',()=>listening()?cancel():begin('home'));
