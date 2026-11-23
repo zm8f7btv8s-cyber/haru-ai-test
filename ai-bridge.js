@@ -25,8 +25,16 @@ async function requestAI(message){
   try{
    const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message}),signal:controller.signal});
    const raw=await r.text();let body;
-   try{body=JSON.parse(raw)}catch{throw Object.assign(new Error('서버 응답이 JSON이 아님'),{code:'SERVER_FORMAT',retryable:false})}
-   if(!r.ok){console.warn('Haru AI server status',r.status,String(raw).slice(0,400));throw Object.assign(new Error('서버 HTTP '+r.status),{code:'HTTP_'+r.status,retryable:r.status===429||r.status>=500});}
+   try{body=JSON.parse(raw)}catch{body=null}
+   if(!r.ok){
+    // Display only a short, sanitized server error field; never expose request data or credentials.
+    const value=body&&typeof body==='object'?(body.error?.message||body.error||body.message||body.detail):null;
+    const detail=typeof value==='string'?value.replace(/sk-[A-Za-z0-9_-]+/g,'[비공개]').replace(/Bearer\s+\S+/gi,'Bearer [비공개]').replace(/https?:\/\/\S+/g,'[주소 생략]').slice(0,240):'';
+    const err=Object.assign(new Error('서버 HTTP '+r.status+(detail?' · '+detail:'')),{code:'HTTP_'+r.status,retryable:r.status===429||r.status>=500,detail});
+    console.warn('Haru AI server status',r.status,detail||'(상세 메시지 없음)');
+    throw err;
+   }
+   if(!body||typeof body!=='object')throw Object.assign(new Error('서버 응답이 JSON이 아님'),{code:'SERVER_FORMAT',retryable:false});
    if(typeof body?.reply!=='string'||!body.reply.trim())throw Object.assign(new Error('서버 응답에 reply 없음'),{code:'SERVER_REPLY',retryable:false});
    return body.reply.trim();
   }catch(e){lastError=e;if(e.name==='AbortError'){lastError=Object.assign(new Error('AI 응답 시간 초과'),{code:'TIMEOUT',retryable:true})}
@@ -208,7 +216,7 @@ else if(action==='agenda'){
 }
 else if(action==='weather'){reply=reply||'실시간 날씨 데이터가 연결되지 않아 정확한 기온을 알려줄 수 없어.'}
 if(!reply)reply='어떤 도움을 줄까?';answer(reply,home,fromVoice,requestId)
-}catch(e){const code=String(e.code||'UNEXPECTED').replace(/[^A-Z0-9_]/g,'').slice(0,32);console.warn('Haru AI unavailable ['+code+']',e);answer('AI 응답 처리에 문제가 생겼어 ('+code+'). 대화와 등록 대기 내용은 유지했어. 다시 시도해 줘.',home,fromVoice,requestId,true)}finally{busy=false;const next=queue.shift();if(next){next.input.value=next.text;void handle(next.form,next.input)}}}
+}catch(e){const code=String(e.code||'UNEXPECTED').replace(/[^A-Z0-9_]/g,'').slice(0,32);console.warn('Haru AI unavailable ['+code+']',e);answer('AI 응답 처리에 문제가 생겼어 ('+code+').'+(e.detail?' 서버 설명: '+e.detail:' 서버 상세 설명은 제공되지 않았어.')+' 기존 일정은 변경하지 않았어.',home,fromVoice,requestId,true)}finally{busy=false;const next=queue.shift();if(next){next.input.value=next.text;void handle(next.form,next.input)}}}
 $('ask').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('ask'),$('askText'))};
 $('chatForm').onsubmit=e=>{e.preventDefault();if(window.HaruLegacyVoice?.isListening()){window.HaruLegacyVoice.complete();return}void handle($('chatForm'),$('chatText'))};
 $('aiTest').onclick=async()=>{const b=$('aiTest'),s=$('aiTestStatus');b.disabled=true;s.textContent='AI 연결 확인 중…';try{s.textContent='연결 성공 · '+(await requestAI('한국어로 짧게 인사해 줘.')).slice(0,140)}catch(e){s.textContent='연결 실패 · '+e.message}finally{b.disabled=false}};
