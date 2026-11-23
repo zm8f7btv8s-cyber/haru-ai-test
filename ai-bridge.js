@@ -54,7 +54,7 @@ function mergeItem(raw,base){
 function jsonReply(raw){const t=raw.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');try{return JSON.parse(t)}catch{const i=t.indexOf('{'),j=t.lastIndexOf('}');if(i<0||j<=i)throw Error('AI 판단 결과 형식 오류');return JSON.parse(t.slice(i,j+1))}}
 async function decide(text){
  const store=snapshot();
- const history=(store.messages||[]).filter(x=>!x.aiError).slice(-5,-1).map(x=>({role:x.who,text:String(x.text||'').slice(0,200)}));
+ const history=(store.messages||[]).filter(x=>!x.aiError).slice(-12,-1).map(x=>({role:x.who,text:String(x.text||'').slice(0,200)}));
  const agenda={events:(store.events||[]).slice(-100).map(x=>({id:String(x.id),title:x.title,date:x.date,time:x.time,place:x.place})),tasks:(store.tasks||[]).slice(-100).map(x=>({id:String(x.id),title:x.title,date:x.date,done:x.done}))};
  const prompt=`하루 AI 개인비서. 사용자의 의도를 문맥으로 판단하고 JSON 객체 하나만 출력. 오늘 ${today()}, 현재 한국시간 ${new Date().toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})}.
 반드시 친근하고 차분한 한국어 반말만 사용해. 존댓말(-요, -습니다, -세요, -까요)은 쓰지 마. 답변은 짧고 구어체로 쓰고, 날짜와 시각은 읽기 쉬운 말로 표현해. 불확실한 사람 이름·장소·모임명은 추측해 바꾸지 말고 확인 질문을 해. 사용자가 직접 수정한 고유명사는 그대로 유지해.
@@ -62,6 +62,8 @@ async function decide(text){
 기존 일정의 제목이 띄어쓰기나 표현이 달라도 저장된 항목을 찾아야 한다. 현재 일정의 고유 ID를 그대로 써야 한다. 기존 일정 변경은 반드시 update, 취소/삭제는 delete. 기존 일정을 변경하면서 propose를 사용하지 말 것. 저장되지 않은 등록 제안 수정은 revise. 기존 항목 수정/삭제 시 반드시 아래 목록의 실제 id를 targetId로 지정. 동일 제목 일정이 복수이고 대상을 확정 못하면 chat으로 명확히 질문. 수정·삭제할 기존 항목이 없을 때만 chat으로 알려줄 것. 새 등록은 기존 항목이 없어도 propose로 진행하며 중복 검사를 먼저 할 것. 단순 사실 진술은 offer, 명시적 새 등록은 propose. 직전 제안에 동의하면 confirm. 날씨 실시간 데이터는 없으니 만들지 말 것. 완료됐다고 주장하지 말 것.
 JSON: {"action":"chat|offer|propose|confirm|revise|cancel|agenda|weather|update|delete","reply":"짧은 한국어 답변","targetId":"기존 항목의 정확한 id 또는 빈 문자열","item":null 또는 {"kind":"events|tasks|notes|works","title":"제목","date":"YYYY-MM-DD 또는 빈 문자열","time":"HH:MM 또는 빈 문자열","place":"장소 또는 빈 문자열"}}.
 update: item에는 변경할 필드만 넣어도 됨. 다른 필드는 원본 유지. delete: item은 null 가능. 새 일정 확인 전 저장 금지.
+최근에 참조한 일정 ID: ${JSON.stringify(recentTarget?.id||'')}
+기존 일정 제목을 정정하는 요청(예: 스타 해 모임이 아니라 스타 회 모임)이면 update로 판단하고 item.title에는 새 제목만 넣어. 변경할 필드가 제목 하나라면 나머지는 생략해. '저녁 7시'는 반드시 19:00. AI가 찾은 targetId는 실제 목록에 있는 ID만 사용해.
 대기 요청: ${JSON.stringify(pending)}
 최근 대화: ${JSON.stringify(history)}
 실제 저장 목록: ${JSON.stringify(agenda)}
@@ -69,7 +71,7 @@ update: item에는 변경할 필드만 넣어도 됨. 다른 필드는 원본 �
  let x;try{x=jsonReply(await requestAI(prompt))}catch(e){if(!e.code)e.code=e instanceof SyntaxError?'AI_JSON':'AI_REQUEST';throw e}
  if(!x||!['chat','offer','propose','confirm','revise','cancel','agenda','weather','update','delete'].includes(x.action)||typeof x.reply!=='string')throw Error('AI 행동 분류 결과 오류');
  if(['confirm','revise'].includes(x.action))x.item=mergeItem(x.item,pending?.item||pending);
- else if(x.action==='update'){const target=findTarget(x.targetId);x.item=target?mergeItem(x.item,target.item):null}
+ else if(x.action==='update'){x.change=x.item&&typeof x.item==='object'&&!Array.isArray(x.item)?x.item:null;x.item=null}
  else x.item=normalizeItem(x.item,null);
  return x;
 }
@@ -91,7 +93,7 @@ function describe(item){return [item.date,item.time,item.title,item.place&&('장
 // Local, deterministic schedule edit path: no AI call is needed for a clearly specified change.
 function scheduleItems(){const s=snapshot();return [...(s.events||[]).map(item=>({item,kind:'events'})),...(s.tasks||[]).map(item=>({item,kind:'tasks'}))]}
 function normalized(v){return String(v||'').toLowerCase().replace(/\s+/g,'').replace(/[^\p{L}\p{N}]/gu,'')}
-function mentionedDay(text){const d=new Date();d.setHours(12,0,0,0);if(/모레/.test(text))d.setDate(d.getDate()+2);else if(/내일/.test(text))d.setDate(d.getDate()+1);else if(/오늘/.test(text)){}else{const full=text.match(/(20\d\d)[-.년\s]+(\d{1,2})[-.월\s]+(\d{1,2})/);if(full)return [full[1],full[2].padStart(2,'0'),full[3].padStart(2,'0')].join('-');return null}return todayOf(d)}
+function mentionedDay(text){const d=new Date();d.setHours(12,0,0,0);if(/모레/.test(text))d.setDate(d.getDate()+2);else if(/내일/.test(text))d.setDate(d.getDate()+1);else if(/오늘/.test(text)){}else{const full=text.match(/(20\d\d)[-.년\s]+(\d{1,2})[-.월\s]+(\d{1,2})/);if(full)return [full[1],full[2].padStart(2,'0'),full[3].padStart(2,'0')].join('-');const md=text.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);if(md){const year=d.getFullYear();return [year,md[1].padStart(2,'0'),md[2].padStart(2,'0')].join('-')}return null}return todayOf(d)}
 function parseTime(text){const globalEvening=/(?:저녁|오후|밤)\s*(?:\d{1,2}\s*(?:시|:)|일곱\s*시)/.test(text);const m=[...text.matchAll(/(?:(오전|오후|아침|저녁|밤|낮)\s*)?(\d{1,2})\s*(?:시|:)(?:\s*(\d{1,2})\s*분?)?/g)];return m.map(x=>{let h=+x[2],minute=+(x[3]||0);if(h>23||minute>59)return null;if((['오후','저녁','밤'].includes(x[1])||(!x[1]&&globalEvening&&m.length===1))&&h<12)h+=12;if(['오전','아침'].includes(x[1])&&h===12)h=0;return String(h).padStart(2,'0')+':'+String(minute).padStart(2,'0')}).filter(Boolean)}
 function targetMatches(text,{day=null,oldTime=null}={}){
  const entries=scheduleItems(),query=normalized(text.replace(/(?:오전|오후|아침|저녁|밤|낮)?\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?/g,' ').replace(/(?:내일|오늘|모레|일정|시간|변경|바꿔|바꿔줘|수정|옮겨|해줘|해주세요|등록|취소|삭제|몇|언제|시각|열두|열한|오케이|응|기존)/g,' '));
@@ -112,11 +114,11 @@ function localScheduleEdit(text){
  let matches=targetMatches(text,{day,oldTime});
  if(!matches.length){const found=recentMatch(day);if(found)matches=[{item:found.item,kind:found.kind}]}
  if(!matches.length&&day){const byDay=scheduleItems().filter(x=>x.item.date===day);if(byDay.length===1)matches=byDay}
- if(matches.length!==1)return {error:matches.length?'같은 조건의 일정이 여러 개야. 날짜나 제목을 더 알려줘.':'변경할 기존 일정을 찾지 못했어. 일정 제목과 날짜를 알려줘.'};
+ if(matches.length!==1)return matches.length>1?{error:'같은 조건의 일정이 여러 개야. 날짜나 제목을 더 알려줘.'}:null;
  const {item:original,kind}=matches[0];rememberTarget(original);if(original.time===newTime)return {error:'이미 '+newTime+'으로 등록된 일정이야.'};
  return {target:{...original,_kind:kind},item:{kind,title:original.title,date:original.date,time:newTime,place:original.place||''}};
 }
-function resolveTarget(result,text){let target=findTarget(result.targetId);if(target){rememberTarget(target.item);return target;}const recent=recentMatch(mentionedDay(text));if(recent&&/(시간|바꿔|변경|수정|취소|삭제)/.test(text))return recent;const day=mentionedDay(text);const matches=targetMatches(text,{day});if(matches.length===1){rememberTarget(matches[0].item);return {kind:matches[0].kind,item:matches[0].item}}return null}
+function resolveTarget(result,text){let target=findTarget(result.targetId);if(target){rememberTarget(target.item);return target;}const recent=recentMatch(mentionedDay(text));if(recent&&/(시간|바꿔|변경|수정|취소|삭제|아니라|이름|명칭|제목)/.test(text))return recent;const day=mentionedDay(text);const byDay=day?scheduleItems().filter(x=>x.item.date===day):[];if(byDay.length===1&&/(변경|바꿔|수정|아니라|이름|명칭|제목)/.test(text)){rememberTarget(byDay[0].item);return byDay[0]}const matches=targetMatches(text,{day});if(matches.length===1){rememberTarget(matches[0].item);return {kind:matches[0].kind,item:matches[0].item}}return null}
 
 function scheduleTitle(text){
  let t=String(text||'').replace(/(?:오늘|내일|모레|이번\s*주|다음\s*주)/g,' ')
@@ -181,11 +183,12 @@ try{
  const result=await decide(text);const action=result.action;const item=result.item;let reply=result.reply.trim();
 if(action==='update'||action==='delete'){
  const target=resolveTarget(result,text);
+ const updated=action==='update'&&target?mergeItem(result.change,target.item):null;
  if(!target||!['events','tasks'].includes(target.kind))reply='변경할 기존 일정을 정확히 찾지 못했어. 어떤 일정인지 알려줄래?';
- else if(action==='update'&&!item)reply='수정할 내용을 확인하지 못했어. 다시 알려줄래?';
- else {setPending({operation:action,targetId:String(target.item.id),kind:target.kind,item:action==='update'?item:null});
- reply=action==='delete'?'기존 '+target.item.title+' 일정을 삭제할까? 확인해 줘.':describe(item)+' 내용으로 기존 일정을 수정할까? 확인해 줘.';
- setTimeout(()=>window.HaruShowAIProposal({...(action==='update'?item:target.item),kind:target.kind,operation:action,targetId:String(target.item.id)}),180);
+ else if(action==='update'&&(!updated||!result.change||!['title','date','time','place'].some(k=>typeof result.change[k]==='string'&&result.change[k].trim()&&result.change[k].trim()!==String(target.item[k]||''))))reply='수정할 내용을 확인하지 못했어. 다시 알려줄래?';
+ else {setPending({operation:action,targetId:String(target.item.id),kind:target.kind,item:action==='update'?updated:null});
+ reply=action==='delete'?'기존 '+target.item.title+' 일정을 삭제할까? 확인해 줘.':describe(updated)+' 내용으로 기존 일정을 수정할까? 확인해 줘.';
+ setTimeout(()=>window.HaruShowAIProposal({...(action==='update'?updated:target.item),kind:target.kind,operation:action,targetId:String(target.item.id)}),180);
  }
 }
 else if(action==='cancel'&&pending){setPending(null);reply=reply||'알겠어. 변경하지 않을게.'}
